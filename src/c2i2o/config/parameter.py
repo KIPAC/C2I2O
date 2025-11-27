@@ -161,6 +161,19 @@ class Parameter[T]:
         self._value = cast_value(self._dtype, value)
         return self._value
 
+    def validate(self, value: Any) -> None:
+        """Test if a value is legal
+
+        Raises
+        ------
+        ValueError if the value is not legal
+        """
+        if value is None:
+            return
+        if self._dtype is None:
+            return
+        assert isinstance(value, self._dtype)
+
     def set_to_default(self) -> T | None:
         """Set the value to the default"""
         self._value = cast_value(self._dtype, self._default)
@@ -196,6 +209,7 @@ class Parameter[T]:
 #
 # Simple parameter types: str, int, float, choice
 #
+
 
 class StrParameter(Parameter[str]):
     """Specialization for string parameters"""
@@ -233,6 +247,19 @@ class FloatParameter(Parameter[float]):
         Parameter[float].__init__(self, float, msg, default, fmt, required=required)
         self._min_value = min_value
         self._max_value = max_value
+
+    def validate(self, value: Any) -> None:
+        """Test if a value is legal
+
+        Raises
+        ------
+        ValueError if the value is not legal
+        """
+        Parameter[float].validate(self, value)
+        if value < self._min_value or value > self._min_value:
+            raise ValueError(
+                f"{self._msg}: value: {value} not in range {self._min_value}:{self._min_value}"
+            )
 
 
 class IntParameter(Parameter[int]):
@@ -279,6 +306,7 @@ class ChoiceParameter(Parameter[Enum]):
 # list parameter types: str, int, float, choice
 #
 
+
 class StrListParameter(Parameter[list[str]]):
     """Specialization for list of string parameters"""
 
@@ -290,7 +318,9 @@ class StrListParameter(Parameter[list[str]]):
         *,
         required: bool = False,
     ):
-        Parameter[list[str]].__init__(self, list[str], msg, default, fmt, required=required)
+        Parameter[list[str]].__init__(
+            self, list[str], msg, default, fmt, required=required
+        )
 
 
 class FloatListParameter(Parameter[list[float]]):
@@ -312,9 +342,25 @@ class FloatListParameter(Parameter[list[float]]):
         *,
         required: bool = False,
     ):
-        Parameter[list[float]].__init__(self, list[float], msg, default, fmt, required=required)
+        Parameter[list[float]].__init__(
+            self, list[float], msg, default, fmt, required=required
+        )
         self._min_value = min_value
         self._max_value = max_value
+
+    def validate(self, value: Any) -> None:
+        """Test if a value is legal
+
+        Raises
+        ------
+        ValueError if the value is not legal
+        """
+        Parameter[list[float]].validate(self, value)
+        for i, val in value:
+            if val < self._min_value or val > self._min_value:
+                raise ValueError(
+                    f"{self._msg}: value[{i}]: {val} not in range {self._min_value}:{self._min_value}"
+                )
 
 
 class IntListParameter(Parameter[list[int]]):
@@ -334,7 +380,9 @@ class IntListParameter(Parameter[list[int]]):
         *,
         required: bool = False,
     ):
-        Parameter[list[int]].__init__(self, list[int], msg, default, fmt, required=required)
+        Parameter[list[int]].__init__(
+            self, list[int], msg, default, fmt, required=required
+        )
 
 
 class ChoiceListParameter(Parameter[list[int]]):
@@ -354,12 +402,15 @@ class ChoiceListParameter(Parameter[list[int]]):
         *,
         required: bool = False,
     ):
-        Parameter[list[int]].__init__(self, list[int], msg, default, fmt, required=required)
+        Parameter[list[int]].__init__(
+            self, list[int], msg, default, fmt, required=required
+        )
 
 
 #
 # dict parameter types: str, int, float, choice
 #
+
 
 class StrToStrDictParameter(Parameter[dict[str, str]]):
     """Specialization for dict mapping str to str parameters"""
@@ -372,7 +423,9 @@ class StrToStrDictParameter(Parameter[dict[str, str]]):
         *,
         required: bool = False,
     ):
-        Parameter[dict[str, str]].__init__(self, dict[str, str], msg, default, fmt, required=required)
+        Parameter[dict[str, str]].__init__(
+            self, dict[str, str], msg, default, fmt, required=required
+        )
 
 
 class StrToFloatDictParameter(Parameter[dict[str, float]]):
@@ -394,9 +447,25 @@ class StrToFloatDictParameter(Parameter[dict[str, float]]):
         *,
         required: bool = False,
     ):
-        Parameter[dict[str, float]].__init__(self, dict[str, float], msg, default, fmt, required=required)
+        Parameter[dict[str, float]].__init__(
+            self, dict[str, float], msg, default, fmt, required=required
+        )
         self._min_value = min_value
         self._max_value = max_value
+
+    def validate(self, value: Any) -> None:
+        """Test if a value is legal
+
+        Raises
+        ------
+        ValueError if the value is not legal
+        """
+        Parameter[dict[str, float]].validate(self, value)
+        for key, val in value.items():
+            if val < self._min_value or val > self._min_value:
+                raise ValueError(
+                    f"{self._msg}: value[{key}]: {val} not in range {self._min_value}:{self._min_value}"
+                )
 
 
 class StrToIntDictParameter(Parameter[dict[str, int]]):
@@ -416,7 +485,9 @@ class StrToIntDictParameter(Parameter[dict[str, int]]):
         *,
         required: bool = False,
     ):
-        Parameter[dict[str, int]].__init__(self, dict[str, int], msg, default, fmt, required=required)
+        Parameter[dict[str, int]].__init__(
+            self, dict[str, int], msg, default, fmt, required=required
+        )
 
 
 class StrToChoiceDictParameter(Parameter[dict[str, int]]):
@@ -436,4 +507,6 @@ class StrToChoiceDictParameter(Parameter[dict[str, int]]):
         *,
         required: bool = False,
     ):
-        Parameter[dict[str, int]].__init__(self, dict[str, int], msg, default, fmt, required=required)
+        Parameter[dict[str, int]].__init__(
+            self, dict[str, int], msg, default, fmt, required=required
+        )
