@@ -7,7 +7,7 @@ from .parameter import Parameter
 
 
 class Configurable:
-    """Base class used to attach Ceci.StageParamters to a class
+    """Base class used to attach Paramters to a class
 
     This implements:
 
@@ -24,8 +24,8 @@ class Configurable:
 
     """
 
-    config_options: dict[str, StageParameter] = dict(
-        name=StageParameter(str, 0.0, fmt="%s", msg="Name for the configurable"),
+    config_options: dict[str, Parameter] = dict(
+        name=Parameter(str, msg="Name for the configurable", default="name", fmt="%s"),
     )
 
     yaml_tag: str = ""
@@ -66,7 +66,7 @@ class Configurable:
             Configuration parameters for this object, must match
             class.config_options data members
         """
-        self._config = StageConfig(**self.config_options)
+        self._config = Config(**self.config_options)
         self._set_config(**kwargs)
 
     def _set_config(self, **kwargs: Any) -> None:
@@ -75,7 +75,7 @@ class Configurable:
             if key in kwargs:
                 self.config[key] = kwcopy.pop(key)
             else:  # pragma: no cover
-                attr = self.config.get(key)
+                attr = self.config[key]
                 if attr.required:
                     raise ValueError(f"Missing configuration option {key}")
                 self.config[key] = attr.default
@@ -97,7 +97,7 @@ class Configurable:
             return default_value
 
     @property
-    def config(self) -> StageConfig:
+    def config(self) -> Config:
         """Return the underlying configuration"""
         return self._config
 

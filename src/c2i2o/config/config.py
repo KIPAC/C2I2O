@@ -1,11 +1,14 @@
-""" A small module with functionality to handle configuration """
+"""A small module with functionality to handle configuration"""
 
-from .parameter import Parameter
+from typing import Any, Iterator
 
-class Config(dict[str, Parameter]):
+from .parameter import Parameter, cast_to_streamable
+
+
+class Config(dict[str, Any]):
     """A small class to manage a dictionary of configuration parameters with basic type checking"""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         """Build from keywords
 
         Note
@@ -21,20 +24,20 @@ class Config(dict[str, Parameter]):
         dict.__init__(self)
         for key, val in kwargs.items():
             if not isinstance(val, Parameter):
-                raise TypeError(f"Config can only take Parameter objects as values")            
-            self.[key]= val.copy()
+                raise TypeError("Config can only take Parameter objects as values")
+            self[key] = val.copy()
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Override __str__ casting to deal with `Parameter` object in the map"""
         s = "{"
         for key, attr in dict.items(self):
-            assert isinstance(val, Parameter):
+            assert isinstance(attr, Parameter)
             val = attr.value
             s += f"{key}:{val},"
         s += "}"
         return s
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """A custom representation"""
         s = "Config"
         s += self.__str__()
@@ -44,7 +47,7 @@ class Config(dict[str, Parameter]):
         """Forcibly return a dict where the values have been cast from Parameter"""
         return {key: cast_to_streamable(value) for key, value in dict.items(self)}
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[str]:
         """Override the __iter__ to work with `Parameter`"""
         d = self.to_dict()
         return iter(d)
@@ -67,13 +70,9 @@ class Config(dict[str, Parameter]):
         """Allow attribute-like parameter setting"""
         return self.__setitem__(key, value)
 
-    def items(self) -> Iterator[key, Any]:
-        """Override items() to get the parameters values instead of the objects"""
-        return [(key, cast_to_streamable(value)) for key, value in dict.items(self)]
-
-    def values(self) -> Iterator[Any]:
-        """Override values() to get the parameters values instead of the objects"""
-        return [cast_to_streamable(value) for value in dict.values(self)]
+    def to_streamable_dict(self) -> dict[str, Any]:
+        """Override return a dict where all the values have been cast to streamable classes"""
+        return {key: cast_to_streamable(value) for key, value in dict.items(self)}
 
     def reset(self) -> None:
         """Reset values to their defaults"""
@@ -85,12 +84,12 @@ class Config(dict[str, Parameter]):
         attr = dict.__getitem__(self, key)
         return attr.dtype
 
-    def numpy_style_help_text(self):
+    def numpy_style_help_text(self) -> str:
         """Create a docstring followwing numpy style guidelines"""
         if not self:
             return "<This class has no configuration options>"
         s = []
         for key, val in dict.items(self):
-            assert isinstance(val, Parameter):
+            assert isinstance(val, Parameter)
             s.append(f"{key}: {val.numpy_style_help_text()}")
-        return '\n\n'.join(s)
+        return "\n\n".join(s)
