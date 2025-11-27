@@ -6,7 +6,6 @@ distances as a fuction of redshift, or the matter-power-spectrum,
 and then to observables such as angular power spectra.
 """
 
-
 from ._version import __version__
 
 __all__ = [
