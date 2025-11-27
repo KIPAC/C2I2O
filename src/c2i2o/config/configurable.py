@@ -107,3 +107,23 @@ class Configurable:
     def to_yaml_dict(self) -> dict[str, dict[str, Any]]:
         """Create a yaml-convertable dict for this object"""
         return {self.yaml_tag: self.config.to_dict()}
+
+
+class ConfigurableParameter(Parameter[Configurable]):
+    """Specialization for configuring a Configurable as a Parameter
+
+    This includes checking.
+
+    Trying to set either any value or the default to a non-mapped value
+    will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: Configurable | None = None,
+        fmt: str = "%s",
+        *,
+        required: bool = False,
+    ):
+        Parameter[Configurable].__init__(self, Configurable, msg, default, fmt, required=required)

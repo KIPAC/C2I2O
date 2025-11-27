@@ -193,6 +193,10 @@ class Parameter[T]:
         return s
 
 
+#
+# Simple parameter types: str, int, float, choice
+#
+
 class StrParameter(Parameter[str]):
     """Specialization for string parameters"""
 
@@ -254,7 +258,7 @@ class IntParameter(Parameter[int]):
 class ChoiceParameter(Parameter[Enum]):
     """Specialization for choice parameters
 
-    This includes check.
+    This includes checking.
 
     Trying to set either the value or the default to a non-mapped value
     will raise a ValueError
@@ -269,3 +273,167 @@ class ChoiceParameter(Parameter[Enum]):
         required: bool = False,
     ):
         Parameter.__init__(self, int, msg, default, fmt, required=required)
+
+
+#
+# list parameter types: str, int, float, choice
+#
+
+class StrListParameter(Parameter[list[str]]):
+    """Specialization for list of string parameters"""
+
+    def __init__(
+        self,
+        msg: str,
+        default: list[str] | None = None,
+        fmt: str = "%s",
+        *,
+        required: bool = False,
+    ):
+        Parameter[list[str]].__init__(self, list[str], msg, default, fmt, required=required)
+
+
+class FloatListParameter(Parameter[list[float]]):
+    """Specialization for list of int parameters
+
+    This includes bounds checking.
+
+    Trying to set either any value or the default outside
+    the bound will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: list[float] | None = None,
+        fmt: str = "%s",
+        min_value: float = -np.inf,
+        max_value: float = np.inf,
+        *,
+        required: bool = False,
+    ):
+        Parameter[list[float]].__init__(self, list[float], msg, default, fmt, required=required)
+        self._min_value = min_value
+        self._max_value = max_value
+
+
+class IntListParameter(Parameter[list[int]]):
+    """Specialization for list of int parameters
+
+    This includes bounds checking.
+
+    Trying to set either any value or the default outside
+    the bound will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: list[int] | None = None,
+        fmt: str = "%i",
+        *,
+        required: bool = False,
+    ):
+        Parameter[list[int]].__init__(self, list[int], msg, default, fmt, required=required)
+
+
+class ChoiceListParameter(Parameter[list[int]]):
+    """Specialization for list of choice parameters
+
+    This includes checking.
+
+    Trying to set either any value or the default to a non-mapped value
+    will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: list[int] | None = None,
+        fmt: str = "%s",
+        *,
+        required: bool = False,
+    ):
+        Parameter[list[int]].__init__(self, list[int], msg, default, fmt, required=required)
+
+
+#
+# dict parameter types: str, int, float, choice
+#
+
+class StrToStrDictParameter(Parameter[dict[str, str]]):
+    """Specialization for dict mapping str to str parameters"""
+
+    def __init__(
+        self,
+        msg: str,
+        default: dict[str, str] | None = None,
+        fmt: str = "%s",
+        *,
+        required: bool = False,
+    ):
+        Parameter[dict[str, str]].__init__(self, dict[str, str], msg, default, fmt, required=required)
+
+
+class StrToFloatDictParameter(Parameter[dict[str, float]]):
+    """Specialization for dict mapping str to float parameters
+
+    This includes bounds checking.
+
+    Trying to set either any value or the default outside
+    the bound will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: dict[str, float] | None = None,
+        fmt: str = "%s",
+        min_value: float = -np.inf,
+        max_value: float = np.inf,
+        *,
+        required: bool = False,
+    ):
+        Parameter[dict[str, float]].__init__(self, dict[str, float], msg, default, fmt, required=required)
+        self._min_value = min_value
+        self._max_value = max_value
+
+
+class StrToIntDictParameter(Parameter[dict[str, int]]):
+    """Specialization for dict mapping str to int parameters
+
+    This includes bounds checking.
+
+    Trying to set either any value or the default outside
+    the bound will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: dict[str, int] | None = None,
+        fmt: str = "%i",
+        *,
+        required: bool = False,
+    ):
+        Parameter[dict[str, int]].__init__(self, dict[str, int], msg, default, fmt, required=required)
+
+
+class StrToChoiceDictParameter(Parameter[dict[str, int]]):
+    """Specialization for dict mapping str to choice parameters
+
+    This includes checking.
+
+    Trying to set either any value or the default to a non-mapped value
+    will raise a ValueError
+    """
+
+    def __init__(
+        self,
+        msg: str,
+        default: dict[str, int] | None = None,
+        fmt: str = "%s",
+        *,
+        required: bool = False,
+    ):
+        Parameter[dict[str, int]].__init__(self, dict[str, int], msg, default, fmt, required=required)
