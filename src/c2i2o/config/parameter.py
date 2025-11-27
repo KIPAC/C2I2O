@@ -189,3 +189,58 @@ class Parameter[T]:
                 s += f"default={self._default}"
         s += f"\n    {self._help}"
         return s
+
+
+
+
+class FloatParameter(Parameter[float]):
+
+    def __init__(
+        self,
+        msg: str,
+        default: float|None=None,
+        fmt: str="%0.4f",
+        min_value: float= -np.inf,
+        max_value: float= np.inf,
+        *,
+        required: bool=False,
+    ):
+        Parameter.__init__(float, msg, default, fmt, required=required)
+        self._min_value = min_value
+        self._max_value = max_value
+
+
+class IntParameter(Parameter[int]):
+
+    def __init__(
+        self,
+        msg: str,
+        default: float|None=None,
+        fmt: str="%i",
+        min_value: int= -np.inf
+        max_value: int= np.inf,
+        *,
+        required: bool=False,
+    ):
+        Parameter.__init__(int, msg, default, fmt, required=required)
+        self._min_value = min_value
+        self._max_value = max_value
+
+
+        
+class ChoiceParameter(Parameter[E]):
+
+    def __init__(
+        self,
+        dtype: type[E], 
+        msg: str,
+        default: str|None=None,
+        fmt: str="%s",
+        *,
+        required: bool=False,
+    ):
+        Parameter.__init__(dtype, msg, default, fmt, required=required)
+
+        
+
+    
