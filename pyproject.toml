@@ -36,7 +36,11 @@ dev = [
     "pytest-cov", # Used to report total code coverage
     "pre-commit", # Used to run checks before finalizing a git commit
     "pylint", # Used for static linting of files
+    "ruff", # Used for static linting of files
+    "mypy", # Used for type-checking
     "jupyter", # Used to render simple test notebook
+    "black", # Used for formatting
+    "isort", # Used for import sorting
 ]
 docs = [
     "nbsphinx",
@@ -56,7 +60,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/cdfvi/_version.py"
+write_to = "src/c2i2o/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -107,7 +111,7 @@ warn_unused_ignores = true
 
 [tool.pylint.MASTER]
 ignore-paths = [
-    "src/cdfvi/_version.py",
+    "src/c2i2o/_version.py",
 ]
 
 
