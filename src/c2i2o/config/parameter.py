@@ -413,7 +413,7 @@ class ChoiceListParameter(Parameter[list[int]]):
 
 
 class StrToStrDictParameter(Parameter[dict[str, str]]):
-    """Specialization for dict mapping str to str parameters"""
+    """Specialization for dict mapping str to str values"""
 
     def __init__(
         self,
@@ -429,7 +429,7 @@ class StrToStrDictParameter(Parameter[dict[str, str]]):
 
 
 class StrToFloatDictParameter(Parameter[dict[str, float]]):
-    """Specialization for dict mapping str to float parameters
+    """Specialization for dict mapping str to float values
 
     This includes bounds checking.
 
@@ -469,7 +469,7 @@ class StrToFloatDictParameter(Parameter[dict[str, float]]):
 
 
 class StrToIntDictParameter(Parameter[dict[str, int]]):
-    """Specialization for dict mapping str to int parameters
+    """Specialization for dict mapping str to int values
 
     This includes bounds checking.
 
@@ -491,7 +491,7 @@ class StrToIntDictParameter(Parameter[dict[str, int]]):
 
 
 class StrToChoiceDictParameter(Parameter[dict[str, int]]):
-    """Specialization for dict mapping str to choice parameters
+    """Specialization for dict mapping str to choice values
 
     This includes checking.
 
