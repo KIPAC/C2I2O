@@ -18,6 +18,9 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "deprecated",
+    "pydantic",
+    "pydantic-numpy",
+    "pydantic-yaml",
     "pyyaml",
     "numpy",
     "tables_io",
@@ -67,7 +70,7 @@ testpaths = [
     "tests",
 ]
 addopts = [
-    "--cov=cdfvi",
+    "--cov=c2i2o",
     "--cov-report=html"
 ]
 
