@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field, create_model
 
 class ScipyWrapped(BaseModel):
 
-    def get_dist(self):
-
+    def build_dist(self) -> Type[sps.rv_continuous]:
+        """Build a return a scipy distribution"""
         dd = self.dict().copy()
         scipy_class = dd.pop('scipy_type')        
         return scipy_class(**dd)
