@@ -1,0 +1,19 @@
+fixed:
+  w0: -1.
+  wa: 0.
+  sigma8: 0.81
+  n_s: 0.96
+priors:
+  Omega_b:
+    scipy_type: 'norm'
+    loc: 0.05
+    scale: 0.01
+  Omega_c:
+    scipy_type: 'norm'
+    loc: 0.25
+    scale: 0.03
+  h:
+    scipy_type: 'norm'
+    loc: 0.70
+    scale: 0.03
+   
