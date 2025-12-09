@@ -1,7 +1,7 @@
 import numpy as np
 from pydantic import BaseModel, Field
 
-from c2i2o.functions.scipy_wrap import ScipyWrapped
+from c2i2o.functions.scipy_wrap import ScipyWrapped, SCIPY_UNION
 
 
 def convert_dict_to_2d_array(
@@ -78,7 +78,7 @@ class PriorSet(BaseModel):
     """
 
     fixed: dict[str, float] = Field({}, description="Fixed Parameter and values")
-    priors: dict[str, ScipyWrapped] = Field(
+    priors: dict[str, SCIPY_UNION] = Field(
         {}, description="Parameters and associted priors"
     )
 

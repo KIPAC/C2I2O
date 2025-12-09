@@ -46,8 +46,8 @@ def make_union(class_list: list[Any]) -> UnionType:
 Cosmology = make_union(COSMOLOGY_LIST)
 
 COSMOLOGY_CLASS_DICT: dict[int, type] = {
-    CosmologyCalculatorType.ccl.value: CCLCosmology,
-    CosmologyCalculatorType.astropy.value: AstropyCosmology,
+    CosmologyCalculatorType.CCL.value: CCLCosmology,
+    CosmologyCalculatorType.ASTROPY.value: AstropyCosmology,
 }
 
 BaseType = Union[int, float, str, Enum]
