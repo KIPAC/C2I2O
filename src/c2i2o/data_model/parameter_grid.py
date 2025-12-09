@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal, Union
 
+import numpy as np
+
 from pydantic import BaseModel, Field
 
 
@@ -31,11 +33,11 @@ class LinearGridParams(GridParams):
     max_value: float = Field(..., description="Maximum value for grid")
 
     def build_grid(self) -> np.ndarry:
-        return np.linspace(min_value, max_value, n_values)
+        return np.linspace(self.min_value, self.max_value, self.n_values)
 
 
 class LogGridParams(GridParams):
-    """Parameters for a logrithmic grid
+    """Parameters for a logarithmic grid
 
     Notes
     -----
@@ -53,7 +55,7 @@ class LogGridParams(GridParams):
     max_value: float = Field(..., description="Maximum value for grid", ge=0.)
 
     def build_grid(self) -> np.ndarry:
-        return np.logspace(np.log10(z_min), np.log10(z_max), n_values)
+        return np.logspace(np.log10(self.min_value), np.log10(self.max_value), self.n_values)
 
 
 GridParamsUnion = Union[
@@ -88,7 +90,7 @@ class LinearAGridParams(LinearGridParams):
     min_value: float = Field(..., description="Minimum value for grid", gt=0., le=1.)
     max_value: float = Field(..., description="Maximum value for grid", gt=0., le=1.)
 
-    
+ 
 class LogAGridParams(LogGridParams):
     """Parameters for a logarithmic grid in scale factor"""
     grid_type: Literal["log"] = Field(default="log", description="Grid type.")

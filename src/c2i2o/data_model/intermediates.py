@@ -4,6 +4,8 @@ from typing import Literal, Union
 
 from pydantic import BaseModel, Field
 
+import numpy as np
+
 from c2i2o.data_model.parameter_grid import LinearAGridParams, LogKGridParams
 
 
@@ -16,13 +18,19 @@ class IntermediateProductCalculationParams(BaseModel):
     eval_kwargs: dict = Field({}, description="Function evaluate kwarg parameters")
     
     def get_function_grid_args(self) -> list[np.ndarry]:
-        return [grid_parms.build_grid() for grid_parms in self.eval_grid]
+        raise NotImplementedError()
+
+    def allocate_arrays(self, n_samples: int) -> np.ndarray:
+        grid_arrays = self.get_function_grid_args()
+        len_list = [n_samples]
+        len_list += [len(grid_array_) for grid_array_ in grid_arrays]
+        return np.zeros(tuple(len_list))
 
     def get_function_kwargs(self) -> dict[str, Any]:
-        return eval_kwargs
+        return self.eval_kwargs
     
-    def evalute_function(self):
-        the_function = getattr(self.cosmology_class, function_name)
+    def evalute_function(self, cosmology):
+        the_function = getattr(cosmology, self.function_name)
         grid_args = self.get_function_grid_args()
         func_kwargs = self.get_function_kwargs()
         return the_function(*grid_args, **func_kwargs)
@@ -39,7 +47,7 @@ class CCLLinearMatterPowerSpectrumCalculationParams(IntermediateProductCalculati
     k_grid: LogKGridParams = Field("k_grid", description="Logarithmic wavenumber grid parameters")
     
     def get_function_grid_args(self) -> list[np.ndarry]:
-        return [a_grid.build_grid(), k_grid.build_grid()]
+        return [self.a_grid.build_grid(), self.k_grid.build_grid()]
 
         
 class CCLComovingRadialDistanceCalculationParams(IntermediateProductCalculationParams):
@@ -52,7 +60,7 @@ class CCLComovingRadialDistanceCalculationParams(IntermediateProductCalculationP
     a_grid: LinearAGridParams = Field("a_grid", description="Scale factor grid parameters")
     
     def get_function_grid_args(self) -> list[np.ndarry]:
-        return [a_grid.build_grid()]
+        return [self.a_grid.build_grid()]
 
         
 class CCLHOverH0CalculationParams(IntermediateProductCalculationParams):
@@ -65,7 +73,7 @@ class CCLHOverH0CalculationParams(IntermediateProductCalculationParams):
     a_grid: LinearAGridParams = Field("a_grid", description="Scale factor grid parameters")
     
     def get_function_grid_args(self) -> list[np.ndarry]:
-        return [a_grid.build_grid()]
+        return [self.a_grid.build_grid()]
 
 
 IntermediateCalculationParamsUnion = Union[
