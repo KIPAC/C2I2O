@@ -1,6 +1,6 @@
 import inspect
-import re
-from typing import Dict, Type, Literal, Any, Optional, Union
+from types import UnionType
+from typing import Any, Dict, Literal, Type
 
 # Import SciPy and Pydantic components
 import scipy.stats as sps
@@ -8,14 +8,20 @@ from pydantic import BaseModel, Field, create_model
 
 
 class ScipyWrapped(BaseModel):
+    """Base class for wrapping a scipy distribution in a pydantic model
+
+    This will be used to algorithmically produce pydantic classes
+    for all the scipy distributions
+    """
+
+    scipy_type: str = Field(..., description="Scipy type.")
 
     def build_dist(self) -> Type[sps.rv_continuous]:
         """Build a return a scipy distribution"""
         scipy_class = getattr(sps, self.scipy_type)
         dd = self.dict()
-        dd.pop('scipy_type')
+        dd.pop("scipy_type")
         return scipy_class(**dd)
-
 
 
 def get_scipy_distributions() -> Dict[str, Any]:
@@ -42,9 +48,9 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
     dynamic_models: Dict[str, Type[BaseModel]] = {}
 
     # Base parameters common to almost all distributions
-    base_params = {
-        'loc': (float, Field(default=0.0, description="Location parameter.")),
-        'scale': (float, Field(default=1.0, description="Scale parameter."))
+    base_params: dict[str, tuple] = {
+        "loc": (float, Field(default=0.0, description="Location parameter.")),
+        "scale": (float, Field(default=1.0, description="Scale parameter.")),
     }
 
     print(f"Found {len(distributions)} distributions in scipy.stats to model...")
@@ -54,17 +60,20 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
         fields = base_params.copy()
 
         # Add the type of the underlying distribution
-        fields['scipy_type'] = (Literal[dist_name], Field(default="", description="Scipy type."))
+        fields["scipy_type"] = (
+            Literal[dist_name],
+            Field(default="", description="Scipy type."),
+        )
 
         # Extract shape parameters from the 'shapes' attribute (comma-separated string)
-        shape_params_str = getattr(dist_obj, 'shapes', None)
+        shape_params_str = getattr(dist_obj, "shapes", None)
 
         # _updated_ctor_param has the default values
         ctor_param = dist_obj._updated_ctor_param()
 
         if shape_params_str:
             # Clean and split the string into individual shape names
-            shape_names = [s.strip() for s in shape_params_str.split(',') if s.strip()]
+            shape_names = [s.strip() for s in shape_params_str.split(",") if s.strip()]
 
             for shape_name in shape_names:
 
@@ -72,18 +81,20 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
                 param_default = ctor_param.get(shape_name)
                 # use float as the safest type if we can't get the type from the default
                 if param_default is None:
-                    param_type = float
+                    param_type: type = float
                 else:
-                    param_type = type(param_default)
+                    param_type: type = type(param_default)
 
-                # Use float as the safest general type for SciPy shape parameters.
                 fields[shape_name] = (
-                    float,
-                    Field(ctor_param.get(shape_name), description=f"Shape parameter '{shape_name}'.")
+                    param_type,
+                    Field(
+                        ctor_param.get(shape_name),
+                        description=f"Shape parameter '{shape_name}'.",
+                    ),
                 )
 
         # Create the dynamic Pydantic model
-        ModelName = f"{dist_name.capitalize()}"
+        model_name: str = f"{dist_name.capitalize()}"
 
         # Use a docstring to clearly identify the model
         docstring = (
@@ -93,11 +104,11 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
 
         try:
             model = create_model(
-                ModelName,
+                model_name,
                 __module__=__name__,
                 __doc__=docstring,
                 __base__=ScipyWrapped,
-                **fields
+                **fields,
             )
             dynamic_models[dist_name] = model
         except Exception as e:
@@ -107,7 +118,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
     return dynamic_models
 
 
-def make_scipy_union(models: Dict[str, Any]) -> Union:
+def make_scipy_union(models: Dict[str, Any]) -> UnionType:
     """Make a Union of a set of classes
 
     Parameters
@@ -120,12 +131,15 @@ def make_scipy_union(models: Dict[str, Any]) -> Union:
     A Union of all the classes
     """
     classes = list(models.values())
-    return Union[*classes]
-
+    the_union = classes[0] | classes[1]
+    for a_class in classes[2:]:
+        the_union = the_union | a_class
+    return the_union
+    # return Union[*classes]
 
 
 # Statically make all the models
 SCIPY_MODELS: Dict[str, Any] = create_pydantic_models_for_scipy_stats()
 
 # Statically make the Union
-SCIPY_UNION: Union = make_scipy_union(SCIPY_MODELS)
+SCIPY_UNION: UnionType = make_scipy_union(SCIPY_MODELS)

@@ -1,11 +1,9 @@
-from typing import Any
-
 import click
 import tables_io
 
 from c2i2o import __version__
-from c2i2o.utility.yaml_utils import read_yaml_file_as
 from c2i2o.generation.c2i_generation import C2IGenerationParams
+from c2i2o.utility.yaml_utils import read_yaml_file_as
 
 from . import options
 
@@ -19,7 +17,7 @@ def c2i() -> None:
 @click.group()
 @click.version_option(__version__)
 def cosmo() -> None:
-    """Cosmology command line interface"""    
+    """Cosmology command line interface"""
 
 
 @cosmo.command(name="generate")
@@ -33,13 +31,13 @@ def generate_cosmo_parameters(
 
     # Read the config file with the priors and cosmology configuration
     c2i_generation_parameters = read_yaml_file_as(C2IGenerationParams, config_file)
-    # Generate the cosmological paramters 
+    # Generate the cosmological paramters
     cosmo_params = c2i_generation_parameters.generate_cosmology_parameters()
 
     # Write the outputs
     tables_io.write(cosmo_params, cosmo_parameter_file)
 
-    
+
 @c2i.command(name="generate")
 @options.cosmo_parameter_file()
 @options.intermediates_file()
@@ -51,15 +49,15 @@ def cosmology_to_intermediates(
 ) -> None:
     """Generate cosmology parameters from priors and compute intermediates"""
 
-    # Read the config file with the priors and cosmology configuration     
+    # Read the config file with the priors and cosmology configuration
     c2i_generation_parameters = read_yaml_file_as(C2IGenerationParams, config_file)
     cosmo_params, intermediates = c2i_generation_parameters.generate_intermediates()
 
-    # Write the outputs    
+    # Write the outputs
     tables_io.write(cosmo_params, cosmo_parameter_file)
     tables_io.write(intermediates, intermediates_file)
 
-    
+
 @c2i.command(name="compute")
 @options.cosmo_parameter_file()
 @options.intermediates_file()
@@ -80,4 +78,3 @@ def compute_intermediates(
 
     # Write the outputs
     tables_io.write(intermediates, intermediates_file)
-

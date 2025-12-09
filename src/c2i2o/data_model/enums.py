@@ -2,14 +2,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pyccl.cosmology import TransferFunctions, MatterPowerSpectra
-
-
 
 class CosmologyCalculatorType(Enum):
+    """Enum for the types of cosmology libraries"""
 
-    ccl = 0
-    astropy = 1
-
-    
-    
+    CCL = 0
+    ASTROPY = 1

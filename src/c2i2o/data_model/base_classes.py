@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Type, TypeVar, Union
+from types import UnionType
+from typing import Any, Union
 
 from .enums import CosmologyCalculatorType
 
@@ -9,6 +10,7 @@ COSMOLOGY_LIST = []
 
 try:
     from pyccl.cosmology import Cosmology as CCLCosmology
+
     COSMOLOGY_LIST.append(CCLCosmology)
 except ImportError:
     print("Warning, could not import pyccl.cosmology")
@@ -16,22 +18,36 @@ except ImportError:
 
 try:
     from astropy.cosmology import Cosmology as AstropyCosmology
+
     COSMOLOGY_LIST.append(AstropyCosmology)
 except ImportError:
     print("Warning, could not import astropy.cosmology")
     AstropyCosmology = None
 
 
-Cosmology = Union[*COSMOLOGY_LIST]
+def make_union(class_list: list[Any]) -> UnionType:
+    """Build a Union from a list of classes
 
-COSMOLOGY_CLASS_DICT: dict[int, Cosmology] = {
-    CosmologyCalculatorType.ccl.value:CCLCosmology,
-    CosmologyCalculatorType.astropy.value:AstropyCosmology,
+    Parameters
+    ----------
+    class_list:
+        Classes we are joining
+
+    Returns
+    -------
+    Union of the classes
+    """
+    the_union = class_list[0] | class_list[1]
+    for a_class_ in class_list[2:]:
+        the_union = the_union | a_class_
+    return the_union
+
+
+Cosmology = make_union(COSMOLOGY_LIST)
+
+COSMOLOGY_CLASS_DICT: dict[int, type] = {
+    CosmologyCalculatorType.ccl.value: CCLCosmology,
+    CosmologyCalculatorType.astropy.value: AstropyCosmology,
 }
-                               
 
-BaseType = Union[int, float, str,  Enum]
-
-
-    
-    
+BaseType = Union[int, float, str, Enum]
