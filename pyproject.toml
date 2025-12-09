@@ -59,6 +59,13 @@ docs = [
     "sphinx-click", # Used for command line interface docs
 ]
 
+
+[project.scripts]
+c2i2o-cosmo = "c2i2o.cli.commands:cosmo"
+
+c2i2o-c2i = "c2i2o.cli.commands:c2i"
+
+
 [build-system]
 requires = [
     "setuptools>=62", # Used to build and package the Python project
