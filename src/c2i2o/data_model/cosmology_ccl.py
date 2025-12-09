@@ -1,13 +1,24 @@
 
 
-
-
 from pydantic import BaseModel, Field, create_model
 
+from c2i2o.data_model.base_clases import Cosmology
+
+
+class CosmologyParams(BaseModel):
+
+    def __init__(self, **kwargs):
+        BaseModel.__init__(self, **kwargs)
+        self._cosomlogy: Cosmology : None = None
+
+
+    def build_cosmology(self) -> Cosmology:
+        raise NotImplementedError()
 
 
 
-class Cosmology_CCL(BaseModel):
+
+class Cosmology_CCL(CosmologyParams):
 
     Omega_c: float = Field(..., description="Cold dark matter density fraction", ge=0., le=1.)
     Omega_b: float = Field(..., description="Baryonic matter density fraction", ge=0., le=1.)    
@@ -33,8 +44,8 @@ class Cosmology_CCL(BaseModel):
 
     extra_parameters: dict = {}
 
-
-    def build_cosmology(self) -> pyccl.cosmology.Cosmology:
+    
+    def build_cosmology(self) -> pyccl.Cosmology:
 
         kwargs_dict = self.dict()
 
@@ -45,9 +56,29 @@ class Cosmology_CCL(BaseModel):
         mg_parametrization_ = kwargs_dict.pop('mg_parametrization')
         if mg_parametrization_ is not None:
             kwargs_dict['mg_parametrization'] = self.build_mg_parametrization(mg_parametrization_)
-        
-        return pyccl.cosmology.Cosmology(**kwargs_dict)
+
+        self._cosomlogy = pyccl.cosmology.Cosmology(**kwargs_dict)
+        return self._cosomlogy
         
         
 
     
+
+class CosmologyFunctionEvaluation(BaseModel):
+
+    function_name: str
+        
+    eval_grid: list[GridParam] = Field([], description="Function evaluate grid parameters")
+    eval_kwargs: dict = Field({}, description="Function evaluate kwarg parameters")
+    
+    def get_function_grid_args(self) -> list[np.ndarry]:
+        return [grid_parms.build_grid() for grid_parms in self.eval_grid]
+
+    def get_function_kwargs(self) -> dict[str, Any]:
+        return eval_kwargs
+    
+    def evalute_function(self, cosmology: Cosmology) -> DataProduct:
+        the_function = getattr(cosmology, function_name)
+        grid_args = self.get_function_grid_args()
+        func_kwargs = self.get_function_kwargs()
+        return the_function(*grid_args, **func_kwargs)

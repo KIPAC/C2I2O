@@ -71,7 +71,7 @@ class PriorSet(BaseModel):
         w0 = -1.
         wa = 0.
       priors:
-        omega_b:
+        Omega_b:
           scipy_type: 'norm'
           loc: 0.05
           scale: 0.01

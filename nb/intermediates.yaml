@@ -1,0 +1,48 @@
+base_cosmology:
+  cosmo_type: pyccl.vanilla
+calculator_type: pyccl   
+prior_set:
+  fixed:
+    w0: -1.
+    wa: 0.
+    sigma8: 0.81
+    n_s: 0.96
+  priors:
+    Omega_b:
+      scipy_type: 'norm'
+      loc: 0.05
+      scale: 0.01
+    Omega_c:
+      scipy_type: 'norm'
+      loc: 0.25
+      scale: 0.03
+    h:
+      scipy_type: 'norm'
+      loc: 0.70
+      scale: 0.03
+n_samples: 1000
+intermediates:
+  matter_power:
+    calculation_type: "pyccl.linear_matter_power"
+    a_grid:
+      min_value: 0.01
+      max_value: 1.00
+      n_values: 100
+    k_grid:       
+      min_value: 1e-4
+      max_value: 1e1
+    n_values: 201
+  comoving_radial_distance:
+    calculation_type: "pyccl.comoving_radial_distance"
+    a_grid:
+      min_value: 0.01
+      max_value: 1.00
+      n_values: 100
+  h_over_h0:
+    function_name: "pyccl.h_over_h0"
+    a_grid:
+      min_value: 0.01
+      max_value: 1.00
+      n_values: 100
+
+

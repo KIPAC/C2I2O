@@ -1,0 +1,7 @@
+a_grid:
+  min_value: 0.01
+  max_value: 1.
+  n_values: 100
+k_grid:
+  min_value: 1e-4
+  max_value: 10.

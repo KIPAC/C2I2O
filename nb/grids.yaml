@@ -1,0 +1,8 @@
+xx:
+  grid_type: linear
+  min_value: 0.
+  max_value: 1.
+xy:
+  grid_type: log
+  min_value: 0.01
+  max_value: 1.

@@ -1,0 +1,22 @@
+fixed:
+  m_nu: 0.5
+priors:
+  omega_b:
+    scipy_type: norm
+    loc: 0.05
+    scale: 0.01
+  omega_m:
+    scipy_type: norm
+    loc: 0.25
+    scale: 0.03
+  h:
+    scipy_type: norm
+    loc: 0.70
+    scale: 0.02
+# multi_priors:
+#   - type: multigauss
+#     parameters: ["a", "b"]
+#     locs: [0.1, 0.1]
+#     cov: [[0.2, 0.2], [0.2, 0.2]]
+
+
