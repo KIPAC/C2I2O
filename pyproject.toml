@@ -43,6 +43,7 @@ dev = [
     "pytest-cov", # Used to report total code coverage
     "pre-commit", # Used to run checks before finalizing a git commit
     "pylint", # Used for static linting of files
+    "pylint-pydantic", 
     "ruff", # Used for static linting of files
     "mypy", # Used for type-checking
     "jupyter", # Used to render simple test notebook
@@ -98,7 +99,7 @@ disable = [
     "use-dict-literal",
     "broad-exception-caught",
 ]
-
+load-plugins = "pylint_pydantic"
 function-naming-style = "snake_case"
 method-naming-style = "snake_case"
 variable-naming-style = "snake_case"
@@ -112,6 +113,9 @@ max-branches = 25
 max-public-methods = 50
 
 [tool.mypy]
+plugins = [
+    "pydantic.mypy",
+]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 ignore_missing_imports = true
