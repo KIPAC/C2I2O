@@ -1,6 +1,6 @@
 import inspect
 from types import UnionType
-from typing import Any, Dict, Literal, Type
+from typing import Any, Dict, Literal, Type, cast
 
 # Import SciPy and Pydantic components
 import scipy.stats as sps
@@ -117,7 +117,7 @@ def make_scipy_union(models: Dict[str, Type[BaseModel]]) -> UnionType:
     the_union = classes[0] | classes[1]
     for a_class in classes[2:]:
         the_union = the_union | a_class
-    return the_union
+    return cast(UnionType, the_union)
     # return Union[*classes]
 
 
@@ -125,7 +125,7 @@ def make_scipy_union(models: Dict[str, Type[BaseModel]]) -> UnionType:
 SCIPY_MODELS: Dict[str, Type[BaseModel]] = create_pydantic_models_for_scipy_stats()
 
 # Statically make the Union
-SCIPY_UNION: UnionType = make_scipy_union(SCIPY_MODELS)
+ScipyUnion: UnionType = make_scipy_union(SCIPY_MODELS)
 
 
 class ScipyWrapped(BaseModel):
@@ -137,7 +137,7 @@ class ScipyWrapped(BaseModel):
 
     # The "type: ignore" is here because mypy won't deal with a dynamically
     # constructed union, but pydantic insists on having the union
-    dist: SCIPY_UNION = Field(discriminator="scipy_type")  # type: ignore[valid-type]
+    dist: ScipyUnion = Field(discriminator="scipy_type")  # type: ignore[valid-type]
 
     def build_dist(self) -> Type[sps.rv_continuous]:
         """Build a return a scipy distribution"""

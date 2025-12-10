@@ -1,3 +1,8 @@
+"""
+The :py:mod:`c2i2o.utiliies.yaml_utils` module collects functions to read and
+write yaml files used by c2i2o.
+"""
+
 from __future__ import annotations
 
 from typing import Type, TypeVar
