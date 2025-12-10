@@ -14,6 +14,9 @@ from c2i2o.data_model.prior_set import PriorSet, convert_table_to_list_of_dicts
 
 
 class C2IGenerationParams(BaseModel):
+    """Class to wrap generation of cosmological paramters
+    and computation of intermediate data products
+    """
 
     base_cosmology: CosmologyParamsUnion = Field(
         ..., description="Reference Cosmological Parameters"
@@ -30,16 +33,54 @@ class C2IGenerationParams(BaseModel):
     )
 
     def generate_cosmology_parameters(self) -> dict[str, np.ndarray]:
+        """Generate a set of cosmological parameters
 
+        Notes
+        -----
+        This will create `self.n_samples` samples drawn from the priors and
+        fixed parameters defined in `self.prior_set`
+        """
         samples = self.prior_set.generate_data(self.n_samples)
         return samples
 
     def build_cosmology_class(self) -> type[Cosmology]:
+        """Return the Cosmology calculator class specified
+
+        Notes
+        -----
+        This will return a cosmology class as selected by
+        `self.calculator_type` from the static dict
+        `c2i2o.data_model.base_classes.COSMOLOGY_CLASS_DICT`
+        """
         return COSMOLOGY_CLASS_DICT[self.calculator_type.value]
 
     def build_cosmology(
         self, cosmology_class: Type[Cosmology], override_parameters: dict[str, float]
     ) -> Cosmology:
+        """Build a Cosmology calculator object
+
+        Parameters
+        ----------
+        cosmology_class:
+            Cosmology calculator class to instantiate.
+            This is provided to avoid having to look it up repeatedly
+            when computing intermediates
+
+        override_parameters:
+            Override values with respect to the `self.base_cosmology`
+
+        Returns
+        -------
+        Newly instantiated Cosmology calculator object
+
+        Notes
+        -----
+        This will return a cosmology class as selected by
+        `self.calculator_type` from the static dict
+        `c2i2o.data_model.base_classes.COSMOLOGY_CLASS_DICT`
+        and updated the parameters in `self.base_cosmology`
+        with `override_parameters`
+        """
 
         cosmo_params = self.base_cosmology.dict().copy()
         cosmo_params.update(**override_parameters)
@@ -50,6 +91,23 @@ class C2IGenerationParams(BaseModel):
     def compute_intermediates(
         self, parameters: dict[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
+        """Compute a set of intermediate data products from input parameters
+
+        Parameters
+        ----------
+        parameters:
+            Cosmological parameters to use in calculations.
+
+        Returns
+        -------
+        Computed intermediate data products
+
+        Notes
+        -----
+        For each set of `paramters` this will compute
+        all of the intermediates defined in `self.computation_parameters`,
+        on the specified evaluation grids
+        """
 
         cosmology_inputs = convert_table_to_list_of_dicts(parameters)
         n_cosmologies = len(cosmology_inputs)
@@ -78,7 +136,20 @@ class C2IGenerationParams(BaseModel):
     def generate_intermediates(
         self,
     ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+        """Generate a set of cosmological parameters and compute intermediates
 
+        Returns
+        -------
+        Generated cosmological parameters
+        Computed intermediate data products
+
+        Notes
+        -----
+        This will create `self.n_samples` samples drawn from the priors and
+        fixed parameters defined in `self.prior_set`.  It will then use those
+        to compute intermediate the data products defined in
+        `self.computation_parameters`.
+        """
         parameter_samples = self.generate_cosmology_parameters()
         intermediates = self.compute_intermediates(parameter_samples)
 
