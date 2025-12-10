@@ -4,7 +4,9 @@ from typing import Any, Type, TypeVar
 
 import click
 
-EnumType_co = TypeVar("EnumType_co", bound=Type[enum.Enum], covariant=True)  # pylint: disable=invalid-name
+EnumType_co = TypeVar(  # pylint: disable=invalid-name
+    "EnumType_co", bound=Type[enum.Enum], covariant=True
+)
 
 
 class EnumChoice(click.Choice):

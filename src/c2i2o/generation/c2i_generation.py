@@ -126,7 +126,7 @@ class C2IGenerationParams(BaseModel):
             elif i % 1000 == 0:  # pragma: no cover
                 sys.stdout.write(f"{i/1000}k!\n")
                 sys.stdout.flush()
-            elif i % 100 == 0:  # pragma: no cover 
+            elif i % 100 == 0:  # pragma: no cover
                 sys.stdout.write("x")
                 sys.stdout.flush()
             elif i % 20 == 0:

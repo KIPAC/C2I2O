@@ -1,4 +1,8 @@
 import c2i2o
 
-def test_dummy():
+__all__ = ["c2i2o"]
+
+
+def test_dummy() -> None:
+    """Dummy function"""
     return
