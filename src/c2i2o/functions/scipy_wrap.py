@@ -83,7 +83,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
                 if param_default is None:
                     param_type: type = float
                 else:
-                    param_type: type = type(param_default)
+                    param_type = type(param_default)
 
                 fields[shape_name] = (
                     param_type,
