@@ -118,6 +118,7 @@ def make_scipy_union(models: Dict[str, Type[BaseModel]]) -> UnionType:
     for a_class in classes[2:]:
         the_union = the_union | a_class
     return cast(UnionType, the_union)
+    # This works for now, but is not in python specification and might break
     # return Union[*classes]
 
 
