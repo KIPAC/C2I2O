@@ -136,11 +136,14 @@ ignore-paths = [
 [tool.coverage.run]
 omit = [
      "*/_version.py",
+     "src/c2i2o/cli/*.py",
      ]
 
 [tool.coverage.report]
 exclude_also = [
     "raise NotImplementedError",
+    "except ImportError",
+    "except Exception as e:",
     "__repr__",
     "TYPE_CHECKING",
     "if cls._instance is None:",

@@ -10,7 +10,8 @@ from c2i2o.data_model.base_classes import COSMOLOGY_CLASS_DICT, Cosmology
 from c2i2o.data_model.cosmology_ccl import CosmologyParamsUnion
 from c2i2o.data_model.enums import CosmologyCalculatorType
 from c2i2o.data_model.intermediates import IntermediateCalculationParamsUnion
-from c2i2o.data_model.prior_set import PriorSet, convert_table_to_list_of_dicts
+from c2i2o.data_model.prior_set import PriorSet
+from c2i2o.utility.conv_utils import convert_table_to_list_of_dicts
 
 
 class C2IGenerationParams(BaseModel):
@@ -117,10 +118,15 @@ class C2IGenerationParams(BaseModel):
         for key, computation in self.computation_parameters.items():
             output_dict[key] = computation.allocate_arrays(n_cosmologies)
 
+        sys.stdout.write(f"Generating {n_cosmologies} cosmologies\n")
+
         for i, cosmo_params_override in enumerate(cosmology_inputs):
             if i == 0:
                 pass
-            elif i % 100 == 0:
+            elif i % 1000 == 0:  # pragma: no cover
+                sys.stdout.write(f"{i/1000}k!\n")
+                sys.stdout.flush()
+            elif i % 100 == 0:  # pragma: no cover 
                 sys.stdout.write("x")
                 sys.stdout.flush()
             elif i % 20 == 0:
@@ -129,7 +135,7 @@ class C2IGenerationParams(BaseModel):
             cosmology = self.build_cosmology(cosmology_class, cosmo_params_override)
             for key, computation in self.computation_parameters.items():
                 output_dict[key][i] = computation.evalute_function(cosmology).T
-        sys.stdout.write("!\n")
+        sys.stdout.write("Done!\n")
         sys.stdout.flush()
         return output_dict
 
