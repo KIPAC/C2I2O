@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Type
+from typing import Type, TypeVar
 
 from pydantic import BaseModel
 from pydantic_yaml import parse_yaml_raw_as
 
 
-def read_yaml_file_as(the_type: Type[BaseModel], filepath: str) -> BaseModel:
+# Define a TypeVar. This represents a generic type.
+T = TypeVar('T', bound=BaseModel)
+
+
+def read_yaml_file_as(the_type: Type[T], filepath: str) -> T:
     """Read a file into an Pydantic object
 
     Parameters
