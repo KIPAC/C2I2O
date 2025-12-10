@@ -75,11 +75,9 @@ class CCLLinearMatterPowerSpectrumCalculationParams(
         default="linear_matter_power", description="Function to call"
     )
 
-    a_grid: LinearAGridParams = Field(
-        LinearAGridParams, description="Scale factor grid parameters"
-    )
+    a_grid: LinearAGridParams = Field(..., description="Scale factor grid parameters")
     k_grid: LogKGridParams = Field(
-        LogKGridParams, description="Logarithmic wavenumber grid parameters"
+        ..., description="Logarithmic wavenumber grid parameters"
     )
 
     def get_function_grid_args(self) -> list[np.ndarray]:

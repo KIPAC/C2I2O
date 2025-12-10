@@ -35,7 +35,7 @@ class CCLCosmologyVanillaLCDMParams(CosmologyParams):
     """CCL VanillaLCDM Specific Parameter set"""
 
     cosmology_type: Literal["ccl.vanillaLCDM"] = Field(
-        default="", description="Type of cosmology parameter set"
+        default="ccl.vanillaLCDM", description="Type of cosmology parameter set"
     )
 
     Omega_k: float = Field(
@@ -118,7 +118,7 @@ class CCLCosmologyParams(CosmologyParams):
     """General CCL Parameter set"""
 
     cosmology_type: Literal["ccl"] = Field(
-        default="", description="Type of cosmology parameter set"
+        default="ccl", description="Type of cosmology parameter set"
     )
 
     Omega_c: float = Field(

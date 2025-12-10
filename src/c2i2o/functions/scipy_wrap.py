@@ -7,23 +7,6 @@ import scipy.stats as sps
 from pydantic import BaseModel, Field, create_model
 
 
-class ScipyWrapped(BaseModel):
-    """Base class for wrapping a scipy distribution in a pydantic model
-
-    This will be used to algorithmically produce pydantic classes
-    for all the scipy distributions
-    """
-
-    scipy_type: str = Field(..., description="Scipy type.")
-
-    def build_dist(self) -> Type[sps.rv_continuous]:
-        """Build a return a scipy distribution"""
-        scipy_class = getattr(sps, self.scipy_type)
-        dd = self.dict()
-        dd.pop("scipy_type")
-        return scipy_class(**dd)
-
-
 def get_scipy_distributions() -> Dict[str, Any]:
     """
     Scans the scipy.stats module for continuous distribution instances.
@@ -48,7 +31,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
     dynamic_models: Dict[str, Type[BaseModel]] = {}
 
     # Base parameters common to almost all distributions
-    base_params: dict[str, tuple] = {
+    base_params: dict[str, Any] = {
         "loc": (float, Field(default=0.0, description="Location parameter.")),
         "scale": (float, Field(default=1.0, description="Scale parameter.")),
     }
@@ -69,7 +52,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
         shape_params_str = getattr(dist_obj, "shapes", None)
 
         # _updated_ctor_param has the default values
-        ctor_param = dist_obj._updated_ctor_param()
+        ctor_param = dist_obj._updated_ctor_param()  # pylint: disable=protected-access
 
         if shape_params_str:
             # Clean and split the string into individual shape names
@@ -107,7 +90,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
                 model_name,
                 __module__=__name__,
                 __doc__=docstring,
-                __base__=ScipyWrapped,
+                __base__=BaseModel,
                 **fields,
             )
             dynamic_models[dist_name] = model
@@ -118,7 +101,7 @@ def create_pydantic_models_for_scipy_stats() -> Dict[str, Type[BaseModel]]:
     return dynamic_models
 
 
-def make_scipy_union(models: Dict[str, Any]) -> UnionType:
+def make_scipy_union(models: Dict[str, Type[BaseModel]]) -> UnionType:
     """Make a Union of a set of classes
 
     Parameters
@@ -139,7 +122,26 @@ def make_scipy_union(models: Dict[str, Any]) -> UnionType:
 
 
 # Statically make all the models
-SCIPY_MODELS: Dict[str, Any] = create_pydantic_models_for_scipy_stats()
+SCIPY_MODELS: Dict[str, Type[BaseModel]] = create_pydantic_models_for_scipy_stats()
 
 # Statically make the Union
 SCIPY_UNION: UnionType = make_scipy_union(SCIPY_MODELS)
+
+
+class ScipyWrapped(BaseModel):
+    """Base class for wrapping a scipy distribution in a pydantic model
+
+    This will be used to algorithmically produce pydantic classes
+    for all the scipy distributions
+    """
+
+    # The "type: ignore" is here because mypy won't deal with a dynamically
+    # constructed union, but pydantic insists on having the union
+    dist: SCIPY_UNION = Field(discriminator="scipy_type")  # type: ignore[valid-type]
+
+    def build_dist(self) -> Type[sps.rv_continuous]:
+        """Build a return a scipy distribution"""
+        scipy_class = getattr(sps, self.dist.scipy_type)  # type: ignore[attr-defined]
+        dd = self.dist.dict()  # type: ignore[attr-defined]
+        dd.pop("scipy_type")
+        return scipy_class(**dd)

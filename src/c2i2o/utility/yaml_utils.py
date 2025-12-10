@@ -5,9 +5,8 @@ from typing import Type, TypeVar
 from pydantic import BaseModel
 from pydantic_yaml import parse_yaml_raw_as
 
-
 # Define a TypeVar. This represents a generic type.
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
 
 
 def read_yaml_file_as(the_type: Type[T], filepath: str) -> T:
