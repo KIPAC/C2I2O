@@ -142,6 +142,6 @@ class ScipyWrapped(BaseModel):
     def build_dist(self) -> Type[sps.rv_continuous]:
         """Build a return a scipy distribution"""
         scipy_class = getattr(sps, self.dist.scipy_type)  # type: ignore[attr-defined]
-        dd = self.dist.dict()  # type: ignore[attr-defined]
+        dd = self.dist.model_dump()  # type: ignore[attr-defined]
         dd.pop("scipy_type")
         return scipy_class(**dd)

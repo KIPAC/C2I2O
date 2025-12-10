@@ -83,7 +83,7 @@ class C2IGenerationParams(BaseModel):
         with `override_parameters`
         """
 
-        cosmo_params = self.base_cosmology.dict().copy()
+        cosmo_params = self.base_cosmology.model_dump().copy()
         cosmo_params.update(**override_parameters)
         cosmo_params.pop("cosmology_type")
         cosmology = cosmology_class(**cosmo_params)
