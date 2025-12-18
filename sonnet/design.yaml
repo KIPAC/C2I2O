@@ -28,6 +28,11 @@ top:
 	  ParameterSpace(pydanctic.BaseModel) #
         grid.py:
 	  GridBase(pydanctic.BaseModel) #
+	  Grid1D(GridBase)
+	  ProductGrid(GridBase)
+	tensor.py:
+	  TensorBase(ABC)
+	  NumpyTensor(TensorBase)
         intermediate.py:
 	  IntermediateBase
           IntermediateSetBase

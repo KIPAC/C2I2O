@@ -4,22 +4,15 @@ This module provides the ParameterSpace class for defining and managing
 multi-dimensional parameter spaces with associated probability distributions.
 """
 
-from typing import Annotated, Any
+from collections.abc import Mapping
+from typing import Annotated, Any, cast
 
 import numpy as np
 from pydantic import BaseModel, Field, field_validator
 
 from c2i2o.core.distribution import DistributionBase, FixedDistribution
-from c2i2o.core.scipy_distributions import (
-    Expon,
-    Gamma,
-    Lognorm,
-    Norm,
-    Powerlaw,
-    T,
-    Truncnorm,
-    Uniform,
-)
+from c2i2o.core.scipy_distributions import (Expon, Gamma, Lognorm, Norm,
+                                            Powerlaw, T, Truncnorm, Uniform)
 
 # Create discriminated union of all distribution types
 DistributionUnion = Annotated[
@@ -43,8 +36,7 @@ class ParameterSpace(BaseModel):
         distribution class during deserialization.
 
     Examples
-    --------
-    >>> param_space = ParameterSpace(
+    -------->>> param_space = ParameterSpace(
     ...     parameters={
     ...         "omega_m": Uniform(loc=0.2, scale=0.2),  # [0.2, 0.4]
     ...         "sigma_8": Norm(loc=0.8, scale=0.1),
@@ -55,7 +47,7 @@ class ParameterSpace(BaseModel):
     >>> log_probs = param_space.log_prob(samples)
     """
 
-    parameters: dict[str, DistributionUnion] = Field(
+    parameters: Mapping[str, DistributionUnion] = Field(
         ..., description="Dictionary of parameter names to distributions"
     )
 
@@ -88,7 +80,10 @@ class ParameterSpace(BaseModel):
         return len(self.parameters)
 
     def sample(
-        self, n_samples: int, random_state: int | None = None, **kwargs
+        self,
+        n_samples: int,
+        random_state: int | None = None,
+        **kwargs: Any,
     ) -> dict[str, np.ndarray]:
         """Draw samples from all parameter distributions.
 
@@ -124,7 +119,7 @@ class ParameterSpace(BaseModel):
             samples[name] = dist.sample(n_samples, random_state=random_state, **kwargs)
         return samples
 
-    def log_prob(self, values: dict[str, np.ndarray | float], **kwargs) -> dict[str, np.ndarray | float]:
+    def log_prob(self, values: Mapping[str, np.ndarray | float], **kwargs: Any) -> dict[str, np.ndarray]:
         """Compute log probability for each parameter.
 
         Parameters
@@ -158,10 +153,10 @@ class ParameterSpace(BaseModel):
             if name not in values:
                 raise KeyError(f"Parameter '{name}' missing from values")
             dist = self.parameters[name]
-            log_probs[name] = dist.log_prob(values[name], **kwargs)
+            log_probs[name] = np.array(dist.log_prob(values[name], **kwargs))
         return log_probs
 
-    def log_prob_joint(self, values: dict[str, np.ndarray | float], **kwargs) -> np.ndarray | float:
+    def log_prob_joint(self, values: Mapping[str, np.ndarray | float], **kwargs: Any) -> np.ndarray | float:
         """Compute joint log probability (sum of individual log probabilities).
 
         Assumes independence between parameters.
@@ -198,9 +193,9 @@ class ParameterSpace(BaseModel):
             else:
                 total = total + log_p
 
-        return total
+        return cast(np.ndarray | float, total)
 
-    def prob(self, values: dict[str, np.ndarray | float], **kwargs) -> dict[str, np.ndarray | float]:
+    def prob(self, values: Mapping[str, np.ndarray | float], **kwargs: Any) -> dict[str, np.ndarray]:
         """Compute probability density for each parameter.
 
         Only available for ScipyDistributionBase subclasses.
@@ -230,11 +225,11 @@ class ParameterSpace(BaseModel):
             dist = self.parameters[name]
             # Check if distribution has prob method
             if hasattr(dist, "prob"):
-                probs[name] = dist.prob(values[name], **kwargs)
+                probs[name] = np.array(dist.prob(np.array(values[name]), **kwargs))
             else:
                 # For distributions without prob (e.g., FixedDistribution),
                 # use exp(log_prob)
-                probs[name] = np.exp(dist.log_prob(values[name], **kwargs))
+                probs[name] = np.array(np.exp(dist.log_prob(values[name], **kwargs)))
         return probs
 
     def get_bounds(self) -> dict[str, tuple[float, float]]:
@@ -329,7 +324,7 @@ class ParameterSpace(BaseModel):
                 raise ValueError(f"Cannot compute std for parameter '{name}'")
         return stds
 
-    def to_array(self, values: dict[str, float | np.ndarray]) -> np.ndarray:
+    def to_array(self, values: Mapping[str, float | np.ndarray]) -> np.ndarray:
         """Convert parameter dictionary to ordered array.
 
         Parameters are ordered alphabetically by name.
@@ -371,9 +366,8 @@ class ParameterSpace(BaseModel):
         if isinstance(first_value, (int, float)):
             # Scalar case
             return np.array(ordered_values)
-        else:
-            # Array case - stack along new axis
-            return np.stack(ordered_values, axis=-1)
+        # Array case - stack along new axis
+        return np.stack(ordered_values, axis=-1)
 
     def from_array(self, array: np.ndarray) -> dict[str, float | np.ndarray]:
         """Convert ordered array to parameter dictionary.
@@ -411,7 +405,7 @@ class ParameterSpace(BaseModel):
             )
 
         # Create dictionary
-        values = {}
+        values: dict[str, float | np.ndarray] = {}
         for i, name in enumerate(self.parameter_names):
             values[name] = array[..., i]
 

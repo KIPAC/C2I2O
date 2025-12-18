@@ -179,33 +179,91 @@ ignore-paths = [
 
 
 [tool.pytest.ini_options]
+minversion = "7.0"
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
+    "-v",
     "--strict-markers",
     "--strict-config",
+    "--tb=short",
     "--cov=c2i2o",
-    "--cov-report=term-missing",
+    "--cov-report=term-missing:skip-covered",
     "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=90",
 ]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "requires_scipy: marks tests that require scipy",
+    "requires_data: marks tests that require external data files",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+# Logging configuration
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src/c2i2o"]
+branch = true
+parallel = true
 omit = [
     "*/tests/*",
-    "*/examples/*",
-    "*/scripts/*",
-    "*/__init__.py",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/.venv/*",
+    "*/venv/*",
 ]
 
 [tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+skip_empty = true
+sort = "Cover"
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
+    "def __str__",
     "raise AssertionError",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "@overload",
+    "class .*\\bProtocol\\):",
+    "class .*\\bProtocol\\[.*\\]\\):",
+    "^\\s*\\.\\.\\.$",
+    "^\\s*pass\\s*$",
 ]
+
+[tool.coverage.html]
+directory = "htmlcov"
+show_contexts = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.paths]
+source = [
+    "src/",
+    "*/site-packages/",
+]
+
+
+

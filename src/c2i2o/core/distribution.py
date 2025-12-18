@@ -57,10 +57,9 @@ class DistributionBase(BaseModel, ABC):
             Samples from the distribution. Shape and type depend on the
             concrete implementation.
         """
-        ...
 
     @abstractmethod
-    def log_prob(self, x: np.ndarray | float, **kwargs: Any) -> np.ndarray | float:
+    def log_prob(self, x: np.ndarray | float, **kwargs: Any) -> np.ndarray:
         """Compute log probability density/mass.
 
         Parameters
@@ -74,7 +73,6 @@ class DistributionBase(BaseModel, ABC):
         -------
             Log probability values. Shape matches input.
         """
-        ...
 
     class Config:
         """Pydantic configuration."""
@@ -132,7 +130,7 @@ class FixedDistribution(DistributionBase):
         """
         return np.full(n_samples, self.value)
 
-    def log_prob(self, x: np.ndarray | float, **kwargs: Any) -> np.ndarray | float:
+    def log_prob(self, x: np.ndarray | float, **kwargs: Any) -> np.ndarray:
         """Compute log probability density.
 
         Returns zero for all inputs (representing a delta function in the
@@ -157,7 +155,7 @@ class FixedDistribution(DistributionBase):
         parameter is held fixed.
         """
         if isinstance(x, (int, float)):
-            return 0.0
+            return np.array([0.0])
         return np.zeros_like(x, dtype=float)
 
 

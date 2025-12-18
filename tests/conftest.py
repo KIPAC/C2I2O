@@ -1,28 +1,96 @@
-"""Shared pytest fixtures for c2i2o tests."""
+"""Pytest configuration and shared fixtures for c2i2o tests."""
 
 import numpy as np
 import pytest
 
+from c2i2o.core.distribution import FixedDistribution
+from c2i2o.core.grid import Grid1D, ProductGrid
+from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.parameter_space import ParameterSpace
+from c2i2o.core.scipy_distributions import Norm, Uniform
+from c2i2o.core.tensor import NumpyTensor
+
 
 @pytest.fixture
-def random_seed() -> int:
-    """Provide a fixed random seed for reproducibility."""
+def random_state() -> int:
+    """Fixed random state for reproducible tests."""
     return 42
 
 
 @pytest.fixture
-def rng(random_seed: int) -> np.random.Generator:
-    """
-    Provide a numpy random number generator.
+def simple_grid_1d() -> Grid1D:
+    """Simple 1D linear grid for testing."""
+    return Grid1D(min_value=0.0, max_value=10.0, n_points=11)
 
-    Parameters
-    ----------
-    random_seed : int
-        Random seed
 
-    Returns
-    -------
-    np.random.Generator
-        Random number generator
-    """
-    return np.random.default_rng(random_seed)
+@pytest.fixture
+def log_grid_1d() -> Grid1D:
+    """Simple 1D logarithmic grid for testing."""
+    return Grid1D(min_value=1.0, max_value=100.0, n_points=3, spacing="log")
+
+
+@pytest.fixture
+def simple_product_grid() -> ProductGrid:
+    """Simple 2D product grid for testing."""
+    return ProductGrid(
+        grids={
+            "x": Grid1D(min_value=0.0, max_value=1.0, n_points=10),
+            "y": Grid1D(min_value=0.0, max_value=2.0, n_points=20),
+        }
+    )
+
+
+@pytest.fixture
+def simple_numpy_tensor_1d(simple_grid_1d: Grid1D) -> NumpyTensor:  # pylint: disable=redefined-outer-name
+    """Simple 1D NumPy tensor for testing."""
+    values = simple_grid_1d.build_grid() ** 2
+    return NumpyTensor(grid=simple_grid_1d, values=values)
+
+
+@pytest.fixture
+def simple_numpy_tensor_2d(
+    simple_product_grid: ProductGrid,  # pylint: disable=redefined-outer-name
+) -> NumpyTensor:
+    """Simple 2D NumPy tensor for testing."""
+    values = np.ones((10, 20))
+    return NumpyTensor(grid=simple_product_grid, values=values)
+
+
+@pytest.fixture
+def simple_intermediate(
+    simple_numpy_tensor_1d: NumpyTensor,  # pylint: disable=redefined-outer-name
+) -> IntermediateBase:
+    """Simple intermediate for testing."""
+    return IntermediateBase(
+        name="test_intermediate",
+        tensor=simple_numpy_tensor_1d,
+        units="Mpc",
+        description="Test intermediate product",
+    )
+
+
+@pytest.fixture
+def simple_intermediate_set(
+    simple_numpy_tensor_1d: NumpyTensor,  # pylint: disable=redefined-outer-name
+    simple_grid_1d: Grid1D,  # pylint: disable=redefined-outer-name
+) -> IntermediateSet:
+    """Simple intermediate set for testing."""
+    intermediate1 = IntermediateBase(name="intermediate1", tensor=simple_numpy_tensor_1d, units="Mpc")
+    intermediate2 = IntermediateBase(
+        name="intermediate2",
+        tensor=NumpyTensor(grid=simple_grid_1d, values=np.ones(11)),
+        units="km/s/Mpc",
+    )
+    return IntermediateSet(intermediates={"intermediate1": intermediate1, "intermediate2": intermediate2})
+
+
+@pytest.fixture
+def simple_parameter_space() -> ParameterSpace:
+    """Simple parameter space for testing."""
+    return ParameterSpace(
+        parameters={
+            "omega_m": Uniform(loc=0.2, scale=0.2),
+            "sigma_8": Norm(loc=0.8, scale=0.1),
+            "h": FixedDistribution(value=0.7),
+        }
+    )
