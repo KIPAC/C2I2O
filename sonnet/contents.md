@@ -74,6 +74,39 @@
 
 ## Module Structure
 
+### src/c2i2o/core/multi_distribution.py
+
+**Purpose**: Multi-dimensional probability distributions with correlation support.
+
+**Classes**:
+- `MultiDistributionBase`: Abstract base class for multivariate distributions
+  - Required fields: dist_type (string identifier), mean (n_dim array), cov (n_dim × n_dim matrix)
+  - Optional fields: param_names (list of parameter names)
+  - Validation: Ensures covariance matrix is symmetric and positive definite
+  - Properties: n_dim, std (standard deviations), correlation (correlation matrix)
+  - Abstract methods: sample(), log_prob()
+  - Uses Pydantic for parameter validation
+
+- `MultiGauss`: Multivariate Gaussian (normal) distribution
+  - dist_type: Literal["multi_gauss"]
+  - Supports arbitrary covariance structure for correlated parameters
+  - Uses scipy.stats.multivariate_normal backend
+  - Methods: sample() returns (n_samples, n_dim) array, log_prob() for density evaluation
+
+- `MultiLogNormal`: Multivariate log-normal distribution
+  - dist_type: Literal["multi_lognormal"]
+  - Parameters specified in log-space, samples returned in real space (positive values)
+  - Useful for parameters that must be positive (e.g., amplitudes, scales)
+  - Underlying Gaussian in log-space, exponentiated for sampling
+  - Methods: sample() returns positive values, log_prob() evaluates in real space
+
+**Design Decisions**:
+- Covariance validation ensures numerical stability (symmetry, positive definiteness)
+- Correlation matrix derived from covariance for interpretability
+- Optional param_names for clearer output and debugging
+- Follows same pattern as scipy_distributions.py (explicit classes, Literal types)
+- Enables discriminated unions for serialization
+
 ### src/c2i2o/core/cosmology.py
 
 **Purpose**: Base classes for representing cosmological models.

@@ -1,8 +1,16 @@
 # Assistant Charge: Python Software Development
 
-**Date:** 2024-12-17
+**Date:** 2024-12-20
 **Project:** c2i2o (Cosmology to Intermediates to Observables)
-**Status:** Version 0.1.0 Ready for Release
+**Status:** Work in progress
+
+---
+
+This is your charge.
+
+Further design notes are in sonnet/design_notes.md
+Current package contents are listed in sonnet/contents.md
+The log of our work in in sonnet/log.md
 
 ---
 
@@ -21,7 +29,7 @@
 - Use sphinx.ext.autodoc.typehints to omit redundant type information in the docstring itself 
 
 ### Testing & Quality
-- When asked unit tests using pytest, but not before
+- When asked write unit tests using pytest, but not before
 - Aim for high code coverage
 - Suggest edge cases and error handling
 
