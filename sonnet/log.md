@@ -2,6 +2,140 @@
 
 This file tracks the development progress, decisions, and changes made to the c2i2o package.
 
+2024-12-21 - Multi-Distribution and Parameter Generation Development
+
+### Session Overview
+
+Extended the c2i2o package with multivariate distribution support and parameter generation capabilities. Implemented classes for correlated parameter distributions and a unified parameter generation system that combines univariate and multivariate distributions.
+
+### Files Created/Modified
+
+#### Core Module Files
+
+1. **src/c2i2o/core/multi_distribution.py**
+
+- MultiDistributionBase: Abstract base class for multivariate distributions
+  - Fields: dist_type, mean (n_dim array), cov (n_dim × n_dim matrix), param_names (optional)
+  - Validation: Symmetric and positive definite covariance matrices
+  - Coercion validators: Convert lists to NumPy arrays for YAML compatibility
+  - Properties: n_dim, std, correlation
+  - Abstract methods: sample(), log_prob()
+
+- MultiGauss: Multivariate Gaussian distribution
+  - Uses scipy.stats.multivariate_normal backend
+  - Supports arbitrary correlation structure
+  - Methods for sampling and probability evaluation
+
+- MultiLogNormal: Multivariate log-normal distribution
+  - Parameters in log-space, samples in real space
+  - Ensures positive values (useful for amplitudes, scales)
+  - Exponentiates underlying Gaussian samples
+
+- MultiDistributionSet: Collection of multivariate distributions
+  - Manages multiple distributions with name collision detection
+  - Discriminated union using dist_type field
+  - Methods: sample() returns dict, log_prob() computes joint probability
+  - Assumes independence between distributions, allows correlations within
+
+2. **src/c2i2o/parameter_generation.py**
+
+- ParameterGenerator: Unified parameter sampling system
+  - Fields: num_samples, scale_factor, parameter_space, multi_distribution_set
+  - Validation: Positive constraints, name collision detection
+  - Scaling: Applies scale_factor to distribution widths (×scale for univariate, ×scale² for multivariate)
+  - Methods: generate(), to_yaml(), from_yaml(), generate_to_hdf5()
+  - Preserves correlations when scaling
+  - Full YAML and HDF5 serialization support
+
+
+#### Test Files
+
+1. **tests/core/test_multi_distribution.py**
+
+- Tests for MultiDistributionBase, MultiGauss, MultiLogNormal
+  - Validation tests (covariance, parameter names)
+  - Sampling tests (basic, reproducibility, statistical properties)
+  - Log probability tests (basic, at mean, edge cases)
+  - Serialization tests (Pydantic model_dump)
+
+- Tests for MultiDistributionSet (~30 test cases)
+  - Creation and validation tests
+  - Name collision detection (single, multiple, default names)
+  - Mixed distribution type tests
+  - Sampling tests (basic, default names, statistical properties)
+  - Log probability tests (basic, missing parameters, independence)
+  - Discriminator mechanism
+  
+2. **tests/test_parameter_generation.py**
+
+- Tests for ParameterGenerator (~40 test cases)
+  - Creation and validation tests
+  - num_samples and scale_factor validation (positive constraints)
+  - Name collision detection (between ParameterSpace and MultiDistributionSet)
+  - Generation tests (basic, reproducibility, sample counts)
+  - Scaling tests (univariate, multivariate, mean preservation, correlation preservation)
+  - YAML I/O tests (basic, roundtrip, complex setups)
+  - HDF5 I/O tests (basic, custom groupname, overwrite, kwargs)
+  - Statistical property tests
+  - Edge case tests (empty ParameterSpace, large/small scale_factor)
+
+### Major Design Decisions
+
+1. List-to-Array Coercion for YAML Compatibility
+
+**Problem:** YAML deserialization converts NumPy arrays to lists, causing Pydantic validation errors
+
+**Solution:** Added `mode="before"` validators to coerce lists to arrays
+```python
+@field_validator("mean", mode="before")
+@classmethod
+def coerce_mean_to_array(cls, v: np.ndarray | list) -> np.ndarray:
+    return np.asarray(v)
+```
+
+**Benefits:**
+- Seamless YAML serialization/deserialization
+- Maintains type safety with Pydantic
+- No manual conversion required by users
+
+2. Scale Factor Application Strategy
+
+**Decision:** Different scaling for univariate vs multivariate distributions
+- Univariate: Multiply `scale` parameter by scale_factor
+- Multivariate: Multiply covariance matrix by scale_factor²
+
+**Rationale:**
+- Preserves correlation structure
+- Standard deviations scale linearly with scale_factor
+- Mathematically consistent (variance ∝ scale²)
+
+3. MultiDistributionSet Independence Assumption
+
+**Decision:** Assume independence between distributions, allow correlations within
+
+**Implementation:**
+```python
+def log_prob(self, values):
+    log_prob_total = sum(dist.log_prob(x) for dist in distributions)
+```
+
+**Rationale:**
+- Simplifies joint probability calculation
+- Each MultiGauss/MultiLogNormal can still have full correlation structure
+- User can create single large distribution if cross-correlations needed
+
+4. Parameter Name Collision Detection
+
+Validation at multiple levels:
+- Within MultiDistributionSet (across distributions)
+- Between ParameterSpace and MultiDistributionSet (in ParameterGenerator)
+- Includes default names (dist{i}_param{j})
+
+**Benefits:**
+- Prevents silent errors from duplicate parameters
+- Clear error messages
+- Validates at construction time
+
 ---
 
 ## 2024-12-18 - Project Initialization and Core Development

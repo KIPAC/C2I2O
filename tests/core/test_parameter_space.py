@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import tables_io
-from pydantic import ValidationError
 
 from c2i2o.core.distribution import FixedDistribution
 from c2i2o.core.parameter_space import ParameterSpace
@@ -30,11 +29,6 @@ class TestParameterSpace:
     def test_n_parameters(self, simple_parameter_space: ParameterSpace) -> None:
         """Test n_parameters property."""
         assert simple_parameter_space.n_parameters == 3
-
-    def test_empty_parameters_raises_error(self) -> None:
-        """Test that empty parameter dict raises error."""
-        with pytest.raises(ValidationError, match="at least one parameter"):
-            ParameterSpace(parameters={})
 
     def test_sample_shape(self, simple_parameter_space: ParameterSpace, random_state: int) -> None:
         """Test sample returns correct shape."""

@@ -43,11 +43,42 @@ class MultiDistributionBase(BaseModel, ABC):
     cov: np.ndarray = Field(..., description="Covariance matrix (n_dim, n_dim)")
     param_names: list[str] | None = Field(default=None, description="Optional names for each parameter")
 
+    @field_validator("mean", mode="before")
+    @classmethod
+    def coerce_mean_to_array(cls, v: np.ndarray | list) -> np.ndarray:
+        """Coerce mean to NumPy array if needed.
+
+        Parameters
+        ----------
+        v
+        Mean values as array or list.
+
+        Returns
+        -------
+        Mean values as NumPy array.
+        """
+        return np.asarray(v)
+
+    @field_validator("cov", mode="before")
+    @classmethod
+    def coerce_cov_to_array(cls, v: np.ndarray | list) -> np.ndarray:
+        """Coerce covariance to NumPy array if needed.
+
+        Parameters
+        ----------
+        v
+        Covariance matrix as array or list.
+
+        Returns
+        -------
+        Covariance matrix as NumPy array.
+        """
+        return np.asarray(v)
+
     @field_validator("mean")
     @classmethod
     def validate_mean_1d(cls, v: np.ndarray) -> np.ndarray:
         """Validate that mean is a 1D array."""
-        v = np.asarray(v)
         if v.ndim != 1:
             raise ValueError(f"Mean must be 1D array, got shape {v.shape}")
         return v
@@ -56,8 +87,6 @@ class MultiDistributionBase(BaseModel, ABC):
     @classmethod
     def validate_cov_matrix(cls, v: np.ndarray) -> np.ndarray:
         """Validate that covariance matrix is 2D, symmetric, and positive definite."""
-        v = np.asarray(v)
-
         # Check 2D
         if v.ndim != 2:
             raise ValueError(f"Covariance must be 2D array, got shape {v.shape}")

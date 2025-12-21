@@ -47,6 +47,7 @@
 │       │   └── ccl
 │       │       ├── __init__.py
 │       │       └── cosmology.py
+│       ├── parameter_generation.py
 │       └── py.typed
 └── tests
     ├── __init__.py
@@ -67,12 +68,52 @@
     │   └── ccl
     │       ├── __init__.py
     │       └── test_cosmology.py
-    └── test_import.py	
+    ├── test_import.py
+    └── test_parameter_generation.py
 ```
 
 ---
 
 ## Module Structure
+
+
+### src/c2i2o/parameter_generation.py
+
+**Purpose**: Parameter generation for combined univariate and multivariate distributions.
+
+**Classes**:
+- `ParameterGenerator`: Generator for cosmological parameter samples
+  - Required fields:
+    - num_samples (int > 0): Number of samples to generate
+    - parameter_space (ParameterSpace): Univariate parameter distributions
+    - multi_distribution_set (MultiDistributionSet): Multivariate parameter distributions
+  - Optional fields:
+    - scale_factor (float > 0, default=1.0): Universal scaling factor for distribution widths
+  - Validation:
+    - Ensures num_samples and scale_factor are positive
+    - Checks for parameter name collisions between ParameterSpace and MultiDistributionSet
+    - Validates against default multi-distribution names (dist{i}_param{j})
+  - Methods:
+    - generate(random_state): Generate parameter samples, returns dict of arrays
+    - to_yaml(filepath): Save configuration to YAML file
+    - from_yaml(filepath): Load configuration from YAML file (class method)
+    - generate_to_hdf5(filepath, groupname="parameters"): Generate and write directly to HDF5
+  - Internal methods:
+    - _scale_parameter_space(): Apply scale_factor to univariate distribution widths
+    - _scale_multi_distribution_set(): Apply scale_factor² to covariance matrices
+  - Serialization: Full support for YAML and HDF5 via tables_io
+
+**Design Decisions**:
+- Combines univariate (ParameterSpace) and multivariate (MultiDistributionSet) distributions
+- scale_factor applied differently to univariate (×scale) and multivariate (×scale²) to preserve correlations
+- FixedDistribution instances unaffected by scale_factor
+- YAML serialization handles NumPy arrays via custom representer
+- HDF5 output uses tables_io for efficient storage
+- Validation ensures no naming conflicts between distribution sources
+- Supports both Path and str for file paths
+- Pydantic validation ensures data integrity throughout
+
+
 
 ### src/c2i2o/core/multi_distribution.py
 

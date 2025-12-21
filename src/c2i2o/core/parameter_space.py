@@ -9,9 +9,9 @@ from typing import Annotated, Any, cast
 
 import numpy as np
 import tables_io
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from c2i2o.core.distribution import DistributionBase, FixedDistribution
+from c2i2o.core.distribution import FixedDistribution
 from c2i2o.core.scipy_distributions import Expon, Gamma, Lognorm, Norm, Powerlaw, T, Truncnorm, Uniform
 
 # Create discriminated union of all distribution types
@@ -50,14 +50,6 @@ class ParameterSpace(BaseModel):
     parameters: Mapping[str, DistributionUnion] = Field(
         ..., description="Dictionary of parameter names to distributions"
     )
-
-    @field_validator("parameters")
-    @classmethod
-    def validate_non_empty(cls, v: dict[str, DistributionBase]) -> dict[str, DistributionBase]:
-        """Validate that parameter dictionary is not empty."""
-        if not v:
-            raise ValueError("Parameter space must contain at least one parameter")
-        return v
 
     @property
     def parameter_names(self) -> list[str]:
