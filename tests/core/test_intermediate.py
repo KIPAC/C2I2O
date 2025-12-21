@@ -1,7 +1,10 @@
 """Tests for c2i2o.core.intermediate module."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
+import tables_io
 from pydantic import ValidationError
 
 from c2i2o.core.grid import Grid1D
@@ -288,3 +291,195 @@ class TestIntermediateSetOperations:
             assert intermediate.name == name
             count += 1
         assert count == 2
+
+
+class TestIntermediateSetIO:
+    """Tests for intermediate set I/O using tables_io."""
+
+    def test_save_values(self, simple_intermediate_set: IntermediateSet, tmp_path: Path) -> None:
+        """Test saving intermediate values to HDF5."""
+        filename = tmp_path / "intermediates.hdf5"
+
+        simple_intermediate_set.save_values(str(filename))
+
+        assert filename.exists()
+
+    def test_load_values(self, simple_intermediate_set: IntermediateSet, tmp_path: Path) -> None:
+        """Test loading intermediate values from HDF5."""
+        filename = tmp_path / "intermediates.hdf5"
+
+        # Save then load
+        simple_intermediate_set.save_values(str(filename))
+        loaded_values = IntermediateSet.load_values(str(filename))
+
+        # Check all intermediates present
+        assert set(loaded_values.keys()) == set(simple_intermediate_set.names)
+
+        # Check values match
+        original_values = simple_intermediate_set.get_values_dict()
+        for name in simple_intermediate_set.names:
+            np.testing.assert_array_equal(loaded_values[name], original_values[name])
+
+    def test_save_load_roundtrip(self, simple_intermediate_set: IntermediateSet, tmp_path: Path) -> None:
+        """Test round-trip save and load."""
+        filename = tmp_path / "roundtrip.hdf5"
+
+        # Get original values
+        original = simple_intermediate_set.get_values_dict()
+
+        # Save
+        simple_intermediate_set.save_values(str(filename))
+
+        # Load
+        loaded = IntermediateSet.load_values(str(filename))
+
+        # Verify identical
+        assert loaded.keys() == original.keys()
+        for name in original.keys():
+            np.testing.assert_array_equal(loaded[name], original[name])
+
+    def test_save_values_preserves_shape(
+        self, simple_intermediate_set: IntermediateSet, tmp_path: Path
+    ) -> None:
+        """Test that value shapes are preserved."""
+        filename = tmp_path / "shapes.hdf5"
+
+        original = simple_intermediate_set.get_values_dict()
+        simple_intermediate_set.save_values(str(filename))
+        loaded = IntermediateSet.load_values(str(filename))
+
+        for name in original.keys():
+            assert loaded[name].shape == original[name].shape
+
+    def test_save_values_preserves_dtypes(
+        self, simple_intermediate_set: IntermediateSet, tmp_path: Path
+    ) -> None:
+        """Test that data types are preserved."""
+        filename = tmp_path / "dtypes.hdf5"
+
+        original = simple_intermediate_set.get_values_dict()
+        simple_intermediate_set.save_values(str(filename))
+        loaded = IntermediateSet.load_values(str(filename))
+
+        for name in original.keys():
+            assert loaded[name].dtype == original[name].dtype
+
+    def test_load_values_is_static_method(self, tmp_path: Path) -> None:
+        """Test that load_values can be called without instance."""
+        # Create dummy data
+        data = {
+            "intermediate1": np.array([1.0, 2.0, 3.0]),
+            "intermediate2": np.array([4.0, 5.0, 6.0]),
+        }
+        filename = tmp_path / "static.hdf5"
+
+        tables_io.write(data, str(filename))
+
+        # Can call without creating IntermediateSet instance
+        loaded = IntermediateSet.load_values(str(filename))
+        assert "intermediate1" in loaded
+        assert "intermediate2" in loaded
+
+    def test_save_single_intermediate(self, simple_grid_1d: Grid1D, tmp_path: Path) -> None:
+        """Test saving set with single intermediate."""
+        intermediate = IntermediateBase(
+            name="single",
+            tensor=NumpyTensor(grid=simple_grid_1d, values=np.ones(11)),
+        )
+        intermediate_set = IntermediateSet(intermediates={"single": intermediate})
+        filename = tmp_path / "single.hdf5"
+
+        intermediate_set.save_values(str(filename))
+        loaded = IntermediateSet.load_values(str(filename))
+
+        assert set(loaded.keys()) == {"single"}
+        np.testing.assert_array_equal(loaded["single"], np.ones(11))
+
+    def test_save_many_intermediates(self, simple_grid_1d: Grid1D, tmp_path: Path) -> None:
+        """Test saving set with many intermediates."""
+        intermediates = {}
+        n_intermediates = 10
+
+        for i in range(n_intermediates):
+            name = f"intermediate_{i}"
+            tensor = NumpyTensor(grid=simple_grid_1d, values=np.ones(11) * i)
+            intermediates[name] = IntermediateBase(name=name, tensor=tensor)
+
+        intermediate_set = IntermediateSet(intermediates=intermediates)
+        filename = tmp_path / "many.hdf5"
+
+        intermediate_set.save_values(str(filename))
+        loaded = IntermediateSet.load_values(str(filename))
+
+        assert len(loaded) == n_intermediates
+
+        for i in range(n_intermediates):
+            name = f"intermediate_{i}"
+            assert name in loaded
+            np.testing.assert_array_equal(loaded[name], np.ones(11) * i)
+
+    def test_save_values_with_different_shapes_raises(self, tmp_path: Path) -> None:
+        """Test saving intermediates with different array shapes."""
+        grid1 = Grid1D(min_value=0.0, max_value=1.0, n_points=10)
+        grid2 = Grid1D(min_value=0.0, max_value=1.0, n_points=20)
+
+        intermediate1 = IntermediateBase(
+            name="short",
+            tensor=NumpyTensor(grid=grid1, values=np.ones(10)),
+        )
+        intermediate2 = IntermediateBase(
+            name="long",
+            tensor=NumpyTensor(grid=grid2, values=np.ones(20) * 2.0),
+        )
+
+        intermediate_set = IntermediateSet(intermediates={"short": intermediate1, "long": intermediate2})
+        filename = tmp_path / "different_shapes.hdf5"
+        with pytest.raises(TypeError):
+            intermediate_set.save_values(str(filename))
+
+
+class TestIntermediateSetIOIntegration:
+    """Integration tests for intermediate set I/O."""
+
+    def test_save_load_update_save(self, simple_intermediate_set: IntermediateSet, tmp_path: Path) -> None:
+        """Test workflow: save, load, update, save again."""
+        filename1 = tmp_path / "original.hdf5"
+        filename2 = tmp_path / "updated.hdf5"
+
+        # Save original
+        simple_intermediate_set.save_values(str(filename1))
+
+        # Load
+        values = IntermediateSet.load_values(str(filename1))
+
+        # Modify
+        for name in values.keys():
+            values[name] = values[name] * 2.0
+
+        # Save modified (need to use tables_io directly or create new set)
+        tables_io.write(values, str(filename2))
+
+        # Load modified
+        loaded = IntermediateSet.load_values(str(filename2))
+
+        # Verify values doubled
+        original = simple_intermediate_set.get_values_dict()
+        for name in original.keys():
+            np.testing.assert_array_equal(loaded[name], original[name] * 2.0)
+
+    def test_save_intermediate_set_and_load_for_reconstruction(
+        self, simple_intermediate_set: IntermediateSet, tmp_path: Path
+    ) -> None:
+        """Test saving values and using them to reconstruct intermediate set."""
+        filename = tmp_path / "for_reconstruction.hdf5"
+
+        # Save values
+        simple_intermediate_set.save_values(str(filename))
+
+        # Load values
+        loaded_values = IntermediateSet.load_values(str(filename))
+
+        # Could reconstruct IntermediateSet if we also saved grids
+        # For now, verify we can access the data
+        assert "intermediate1" in loaded_values
+        assert "intermediate2" in loaded_values

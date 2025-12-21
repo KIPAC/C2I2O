@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Literal, cast
 
 import numpy as np
+import tables_io
 from pydantic import BaseModel, Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
@@ -377,6 +378,50 @@ class ProductGrid(GridBase):
             Total number of grid points.
         """
         return self.total_points
+
+    def save_grid(self, filename: str) -> None:
+        """Save grid points to HDF5 file using tables_io.
+
+        Saves the flattened grid as a dictionary of arrays.
+
+        Parameters
+        ----------
+        filename
+            Output filename. Should end with .hdf5.
+
+        Examples
+        --------
+        >>> grid = ProductGrid(
+        ...     grids={
+        ...         "x": Grid1D(min_value=0.0, max_value=1.0, n_points=10),
+        ...         "y": Grid1D(min_value=0.0, max_value=2.0, n_points=20),
+        ...     }
+        ... )
+        >>> grid.save_grid("grid_points.hdf5")
+        """
+        grid_dict = self.build_grid_dict()
+        tables_io.write(grid_dict, filename)
+
+    @staticmethod
+    def load_grid(filename: str) -> dict[str, np.ndarray]:
+        """Load grid points from HDF5 file using tables_io.
+
+        Parameters
+        ----------
+        filename
+            Input filename to read from.
+
+        Returns
+        -------
+            Dictionary mapping dimension names to arrays of grid points.
+
+        Examples
+        --------
+        >>> points = ProductGrid.load_grid("grid_points.hdf5")
+        >>> points.keys()
+        dict_keys(['x', 'y'])
+        """
+        return cast(dict[str, np.ndarray], tables_io.read(filename))
 
 
 __all__ = [

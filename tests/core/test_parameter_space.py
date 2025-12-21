@@ -1,7 +1,10 @@
 """Tests for c2i2o.core.parameter_space module."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
+import tables_io
 from pydantic import ValidationError
 
 from c2i2o.core.distribution import FixedDistribution
@@ -321,3 +324,119 @@ class TestParameterSpaceCoverageGaps:
         # Should use exp(log_prob) which gives exp(0) = 1.0
         assert "x" in probs
         np.testing.assert_array_equal(probs["x"], np.ones(3))
+
+
+class TestParameterSpaceIO:
+    """Tests for parameter space I/O using tables_io."""
+
+    def test_save_samples(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test saving parameter samples to HDF5."""
+        samples = simple_parameter_space.sample(100, random_state=random_state)
+        filename = tmp_path / "samples.hdf5"
+
+        simple_parameter_space.save_samples(samples, str(filename))
+
+        assert filename.exists()
+
+    def test_load_samples(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test loading parameter samples from HDF5."""
+        samples = simple_parameter_space.sample(100, random_state=random_state)
+        filename = tmp_path / "samples.hdf5"
+
+        # Save then load
+        simple_parameter_space.save_samples(samples, str(filename))
+        loaded_samples = ParameterSpace.load_samples(str(filename))
+
+        # Check all parameters present
+        assert set(loaded_samples.keys()) == set(samples.keys())
+
+        # Check values match
+        for name in samples.keys():
+            np.testing.assert_array_equal(loaded_samples[name], samples[name])
+
+    def test_save_load_roundtrip(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test round-trip save and load."""
+        samples = simple_parameter_space.sample(500, random_state=random_state)
+        filename = tmp_path / "roundtrip.hdf5"
+
+        # Save
+        simple_parameter_space.save_samples(samples, str(filename))
+
+        # Load
+        loaded = ParameterSpace.load_samples(str(filename))
+
+        # Verify identical
+        assert loaded.keys() == samples.keys()
+        for name in samples.keys():
+            np.testing.assert_array_equal(loaded[name], samples[name])
+
+    def test_save_samples_preserves_shape(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test that sample shapes are preserved."""
+        n_samples = 1000
+        samples = simple_parameter_space.sample(n_samples, random_state=random_state)
+        filename = tmp_path / "shapes.hdf5"
+
+        simple_parameter_space.save_samples(samples, str(filename))
+        loaded = ParameterSpace.load_samples(str(filename))
+
+        for name in samples.keys():
+            assert loaded[name].shape == (n_samples,)
+
+    def test_save_samples_preserves_dtypes(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test that data types are preserved."""
+        samples = simple_parameter_space.sample(100, random_state=random_state)
+        filename = tmp_path / "dtypes.hdf5"
+
+        simple_parameter_space.save_samples(samples, str(filename))
+        loaded = ParameterSpace.load_samples(str(filename))
+
+        for name in samples.keys():
+            # Should preserve float type
+            assert loaded[name].dtype == samples[name].dtype
+
+    def test_save_empty_samples(self, simple_parameter_space: ParameterSpace, tmp_path: Path) -> None:
+        """Test saving empty samples."""
+        samples = simple_parameter_space.sample(0)
+        filename = tmp_path / "empty.hdf5"
+
+        simple_parameter_space.save_samples(samples, str(filename))
+        loaded = ParameterSpace.load_samples(str(filename))
+
+        assert loaded.keys() == samples.keys()
+        for name in samples.keys():
+            assert len(loaded[name]) == 0
+
+    def test_load_samples_is_static_method(self, tmp_path: Path) -> None:
+        """Test that load_samples can be called without instance."""
+        # Create dummy data
+        data = {"param1": np.array([1.0, 2.0, 3.0])}
+        filename = tmp_path / "static.hdf5"
+
+        tables_io.write(data, str(filename))
+
+        # Can call without creating ParameterSpace instance
+        loaded = ParameterSpace.load_samples(str(filename))
+        assert "param1" in loaded
+        np.testing.assert_array_equal(loaded["param1"], data["param1"])
+
+    def test_save_large_samples(
+        self, simple_parameter_space: ParameterSpace, random_state: int, tmp_path: Path
+    ) -> None:
+        """Test saving large number of samples."""
+        samples = simple_parameter_space.sample(100000, random_state=random_state)
+        filename = tmp_path / "large.hdf5"
+
+        simple_parameter_space.save_samples(samples, str(filename))
+        loaded = ParameterSpace.load_samples(str(filename))
+
+        assert loaded["omega_m"].shape == (100000,)

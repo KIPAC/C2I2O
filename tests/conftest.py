@@ -7,6 +7,7 @@ from c2i2o.core.computation import ComputationConfig
 from c2i2o.core.distribution import FixedDistribution
 from c2i2o.core.grid import Grid1D, ProductGrid
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.multi_distribution import MultiGauss, MultiLogNormal
 from c2i2o.core.parameter_space import ParameterSpace
 from c2i2o.core.scipy_distributions import Norm, Uniform
 from c2i2o.core.tensor import NumpyTensor
@@ -203,3 +204,27 @@ def simple_computation_config(
         eval_grid=simple_grid_1d,
         eval_kwargs={"method": "default"},
     )
+
+
+@pytest.fixture
+def simple_multi_gauss() -> MultiGauss:
+    """Simple 2D Gaussian distribution for testing."""
+    mean = np.array([0.0, 0.0])
+    cov = np.eye(2)
+    return MultiGauss(mean=mean, cov=cov)
+
+
+@pytest.fixture
+def correlated_multi_gauss() -> MultiGauss:
+    """2D Gaussian with correlation for testing."""
+    mean = np.array([0.3, 0.8])
+    cov = np.array([[0.01, 0.005], [0.005, 0.02]])
+    return MultiGauss(mean=mean, cov=cov, param_names=["omega_m", "sigma_8"])
+
+
+@pytest.fixture
+def simple_multi_lognormal() -> MultiLogNormal:
+    """Simple 2D log-normal distribution for testing."""
+    mean_log = np.array([0.0, 0.0])
+    cov_log = np.eye(2) * 0.1
+    return MultiLogNormal(mean=mean_log, cov=cov_log)

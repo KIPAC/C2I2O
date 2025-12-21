@@ -8,9 +8,10 @@ power spectra, distance-redshift relations, and Hubble evolution.
 
 from abc import ABC
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+import tables_io
 from pydantic import BaseModel, Field, field_validator
 
 from c2i2o.core.grid import GridBase
@@ -447,6 +448,43 @@ class IntermediateSet(BaseModel):
             String representation.
         """
         return f"IntermediateSet(n_intermediates={len(self)}, names={self.names})"
+
+    def save_values(self, filename: str) -> None:
+        """Save intermediate values to HDF5 file using tables_io.
+
+        Parameters
+        ----------
+        filename
+            Output filename. Should end with .hdf5.
+
+        Examples
+        --------
+        >>> intermediate_set = IntermediateSet(intermediates={...})
+        >>> intermediate_set.save_values("intermediates.hdf5")
+        """
+        values_dict = self.get_values_dict()
+        tables_io.write(values_dict, filename)
+
+    @staticmethod
+    def load_values(filename: str) -> dict[str, np.ndarray]:
+        """Load intermediate values from HDF5 file using tables_io.
+
+        Parameters
+        ----------
+        filename
+            Input filename to read from.
+
+        Returns
+        -------
+            Dictionary mapping intermediate names to arrays of values.
+
+        Examples
+        --------
+        >>> values = IntermediateSet.load_values("intermediates.hdf5")
+        >>> values.keys()
+        dict_keys(['comoving_distance', 'hubble_rate'])
+        """
+        return cast(dict[str, np.ndarray], tables_io.read(filename))
 
     class Config:
         """Pydantic configuration."""

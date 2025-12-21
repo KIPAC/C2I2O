@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Annotated, Any, cast
 
 import numpy as np
+import tables_io
 from pydantic import BaseModel, Field, field_validator
 
 from c2i2o.core.distribution import DistributionBase, FixedDistribution
@@ -409,6 +410,51 @@ class ParameterSpace(BaseModel):
             values[name] = array[..., i]
 
         return values
+
+    def save_samples(self, samples: dict[str, np.ndarray], filename: str) -> None:
+        """Save parameter samples to HDF5 file using tables_io.
+
+        Parameters
+        ----------
+        samples
+            Dictionary mapping parameter names to arrays of samples.
+            Typically output from sample() method.
+        filename
+            Output filename. Should end with .hdf5.
+
+        Examples
+        --------
+        >>> param_space = ParameterSpace(
+        ...     parameters={
+        ...         "omega_m": Uniform(loc=0.2, scale=0.2),
+        ...         "sigma_8": Norm(loc=0.8, scale=0.1),
+        ...     }
+        ... )
+        >>> samples = param_space.sample(10000, random_state=42)
+        >>> param_space.save_samples(samples, "samples.hdf5")
+        """
+        tables_io.write(samples, filename)
+
+    @staticmethod
+    def load_samples(filename: str) -> dict[str, np.ndarray]:
+        """Load parameter samples from HDF5 file using tables_io.
+
+        Parameters
+        ----------
+        filename
+            Input filename to read from.
+
+        Returns
+        -------
+            Dictionary mapping parameter names to arrays of samples.
+
+        Examples
+        --------
+        >>> samples = ParameterSpace.load_samples("samples.hdf5")
+        >>> samples.keys()
+        dict_keys(['omega_m', 'sigma_8'])
+        """
+        return cast(dict[str, np.ndarray], tables_io.read(filename))
 
     class Config:
         """Pydantic configuration."""
