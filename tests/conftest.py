@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from c2i2o.core.computation import ComputationConfig
 from c2i2o.core.distribution import FixedDistribution
 from c2i2o.core.grid import Grid1D, ProductGrid
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
@@ -188,4 +189,17 @@ def simple_ccl_cosmology_calculator() -> CCLCosmologyCalculator:
         h=0.7,
         sigma8=0.8,
         n_s=0.96,
+    )
+
+
+@pytest.fixture
+def simple_computation_config(
+    simple_grid_1d: Grid1D,  # pylint: disable=redefined-outer-name
+) -> ComputationConfig:
+    """Simple computation configuration for testing."""
+    return ComputationConfig(
+        computation_type="test_computation",
+        cosmology_type="ccl",
+        eval_grid=simple_grid_1d,
+        eval_kwargs={"method": "default"},
     )
