@@ -96,13 +96,12 @@ def compute(
         calculator.compute_from_file(
             input_file=input_file,
             output_file=output,
-            overwrite=overwrite,
         )
 
         if verbose:
-            click.echo(f"✓ Successfully wrote intermediates to: {output}")
+            click.echo(f"Successfully wrote intermediates to: {output}")
 
-        click.secho(f"Computed intermediates → {output}", fg="green")
+        click.secho(f"Computed intermediates: {output}", fg="green")
 
     except FileNotFoundError as e:
         raise click.ClickException(f"File not found: {e}") from e

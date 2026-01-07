@@ -28,17 +28,12 @@ class TestC2IComputeCommand:
             "intermediate_calculator": {
                 "baseline_cosmology": {
                     "cosmology_type": "ccl_vanilla_lcdm",
-                    "Omega_c": 0.25,
-                    "Omega_b": 0.05,
-                    "h": 0.67,
-                    "sigma8": 0.8,
-                    "n_s": 0.96,
                 },
                 "computations": {
                     "chi": {
                         "computation_type": "comoving_distance",
                         "function": "comoving_angular_distance",
-                        "cosmology_type": "ccl_vanilla_lcdm",
+                        "cosmology_type": "ccl",
                         "eval_grid": {
                             "grid_type": "grid_1d",
                             "min_value": 0.5,
@@ -70,7 +65,7 @@ class TestC2IComputeCommand:
             "n_s": np.array([0.96, 0.96]),
         }
 
-        params_file = tmp_path / "params.h5"
+        params_file = tmp_path / "params.hdf5"
         write(params, str(params_file))
 
         return params_file
@@ -85,7 +80,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test basic compute command."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -103,7 +98,6 @@ class TestC2IComputeCommand:
                 str(output_file),
             ],
         )
-
         assert result.exit_code == 0
         assert output_file.exists()
         assert "Computed intermediates" in result.output
@@ -118,7 +112,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test compute command with verbose output."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -157,7 +151,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test compute with short option flags."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -189,7 +183,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test compute with long option flags."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -221,7 +215,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that existing files are protected without --overwrite."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -270,7 +264,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test overwriting existing file with --overwrite flag."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -315,7 +309,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test error handling for missing config file."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
         missing_config = tmp_path / "nonexistent.yaml"
 
         result = runner.invoke(
@@ -341,8 +335,8 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test error handling for missing input file."""
-        output_file = tmp_path / "intermediates.h5"
-        missing_input = tmp_path / "nonexistent.h5"
+        output_file = tmp_path / "intermediates.hdf5"
+        missing_input = tmp_path / "nonexistent.hdf5"
 
         result = runner.invoke(
             cli,
@@ -372,7 +366,7 @@ class TestC2IComputeCommand:
         with open(invalid_config, "w") as f:
             yaml.dump({"invalid_field": "value"}, f)
 
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         result = runner.invoke(
             cli,
@@ -400,7 +394,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that output file contains expected data."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -485,7 +479,7 @@ class TestC2IComputeCommand:
         with open(config_file, "w") as f:
             yaml.dump(config, f)
 
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -572,7 +566,7 @@ class TestC2IComputeCommand:
         with open(config_file, "w") as f:
             yaml.dump(config, f)
 
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -638,7 +632,7 @@ class TestC2IComputeCommand:
                 "compute",
                 str(calculator_config),
                 "-i",
-                "params.h5",
+                "params.hdf5",
             ],
         )
 
@@ -684,7 +678,7 @@ class TestC2IComputeCommand:
         with open(cosmo_config_file, "w") as f:
             yaml.dump(cosmo_config, f)
 
-        params_file = tmp_path / "params.h5"
+        params_file = tmp_path / "params.hdf5"
 
         # Generate parameters
         result_gen = runner.invoke(
@@ -704,7 +698,7 @@ class TestC2IComputeCommand:
         assert params_file.exists()
 
         # Step 2: Compute intermediates
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -742,7 +736,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that verbose mode shows cosmology information."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -775,7 +769,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that success message is present."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -804,8 +798,8 @@ class TestC2IComputeCommand:
     ) -> None:
         """Test that error messages are clear and helpful."""
         missing_config = tmp_path / "nonexistent.yaml"
-        missing_input = tmp_path / "nonexistent.h5"
-        output_file = tmp_path / "output.h5"
+        missing_input = tmp_path / "nonexistent.hdf5"
+        output_file = tmp_path / "output.hdf5"
 
         result = runner.invoke(
             cli,
@@ -844,10 +838,10 @@ class TestC2IComputeCommand:
             "n_s": np.random.uniform(0.94, 0.98, n_samples),
         }
 
-        params_file = tmp_path / "params.h5"
+        params_file = tmp_path / "params.hdf5"
         write(params, str(params_file))
 
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -899,7 +893,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that config file is the only positional argument."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -931,7 +925,7 @@ class TestC2IComputeCommand:
         tmp_path: Path,
     ) -> None:
         """Test that input and output are both options for symmetry."""
-        output_file = tmp_path / "intermediates.h5"
+        output_file = tmp_path / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -971,10 +965,10 @@ class TestC2IComputeCommand:
             "n_s": np.random.uniform(0.94, 0.98, n_samples),
         }
 
-        params_file = tmp_path / "large_params.h5"
+        params_file = tmp_path / "large_params.hdf5"
         write(params, str(params_file))
 
-        output_file = tmp_path / "large_intermediates.h5"
+        output_file = tmp_path / "large_intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -1017,10 +1011,10 @@ class TestC2IComputeCommand:
             "n_s": np.array([0.96]),
         }
 
-        params_file = tmp_path / "single_param.h5"
+        params_file = tmp_path / "single_param.hdf5"
         write(params, str(params_file))
 
-        output_file = tmp_path / "single_intermediate.h5"
+        output_file = tmp_path / "single_intermediate.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
@@ -1057,7 +1051,7 @@ class TestC2IComputeCommand:
     ) -> None:
         """Test that output file is created even if directory doesn't exist."""
         # Create nested directory path
-        nested_output = tmp_path / "nested" / "dir" / "intermediates.h5"
+        nested_output = tmp_path / "nested" / "dir" / "intermediates.hdf5"
 
         mock_cosmo = MagicMock()
         mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
