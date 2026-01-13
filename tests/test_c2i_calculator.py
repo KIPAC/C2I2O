@@ -219,11 +219,8 @@ class TestC2ICalculator:
         params = {"Omega_c": np.array([0.25, 0.26])}
         results = calculator.compute_to_dict(params)
 
-        assert "sample_000" in results
-        assert "sample_001" in results
-        assert "chi" in results["sample_000"]
-        assert "chi" in results["sample_001"]
-        assert results["sample_000"]["chi"].shape == (10,)
+        assert "chi" in results
+        assert results["chi"].shape == (2, 10)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_to_dict_multiple_intermediates(
@@ -251,7 +248,7 @@ class TestC2ICalculator:
         params = {"Omega_c": np.array([0.25])}
         results = calculator.compute_to_dict(params)
 
-        assert set(results["sample_000"].keys()) == {"chi", "H"}
+        assert set(results.keys()) == {"chi", "H"}
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_from_file_basic(
@@ -281,10 +278,8 @@ class TestC2ICalculator:
         assert output_file.exists()
         results = read(str(output_file))
 
-        assert "sample_000_chi" in results
-        assert "sample_001_chi" in results
-        assert results["sample_000_chi"].shape == (10,)
-        assert results["sample_001_chi"].shape == (10,)
+        assert "chi" in results
+        assert results["chi"].shape == (2, 10)
 
     def test_compute_from_file_missing_input(
         self,
@@ -428,7 +423,7 @@ class TestC2ICalculator:
 
         # Should produce same structure
         assert set(results_orig.keys()) == set(results_load.keys())
-        assert set(results_orig["sample_000"].keys()) == set(results_load["sample_000"].keys())
+        assert np.allclose(results_orig["chi"], results_load["chi"])
 
     def test_serialization_basic(
         self,
@@ -514,9 +509,9 @@ class TestC2ICalculator:
 
         # Verify order
         results = read(str(output_file))
-        assert results["sample_000_chi"][0] == 1000
-        assert results["sample_001_chi"][0] == 1100
-        assert results["sample_002_chi"][0] == 1200
+        assert (results["chi"][0] == 1000).all()
+        assert (results["chi"][1] == 1100).all()
+        assert (results["chi"][2] == 1200).all()
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_large_number_of_samples(
@@ -535,33 +530,6 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         assert len(intermediate_sets) == n_samples
-
-    @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
-    def test_flat_hdf5_structure(
-        self,
-        mock_pyccl: Mock,
-        calculator: C2ICalculator,
-        tmp_path: Path,
-    ) -> None:
-        """Test that HDF5 output has flat structure (no groups)."""
-        mock_cosmo = MagicMock()
-        mock_pyccl.CosmologyVanillaLCDM.return_value = mock_cosmo
-        mock_pyccl.comoving_angular_distance.return_value = np.ones(10) * 1000
-
-        input_file = tmp_path / "params.hdf5"
-        params = {"Omega_c": np.array([0.25, 0.26])}
-        write(params, str(input_file))
-
-        output_file = tmp_path / "intermediates.hdf5"
-        calculator.compute_from_file(input_file, output_file)
-
-        # Read and check structure
-        results = read(str(output_file))
-
-        # All keys should be at top level with sample_XXX_name format
-        assert all("sample_" in key for key in results.keys())
-        assert "sample_000_chi" in results
-        assert "sample_001_chi" in results
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_intermediate_set_accessible_by_name(
@@ -672,8 +640,8 @@ class TestC2ICalculator:
         calculator.compute_from_file(input_file, output_file)
 
         results = read(str(output_file))
-        assert "sample_000_chi" in results
-        assert "sample_000_H" in results
+        assert "chi" in results
+        assert "H" in results
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_yaml_with_multiple_computations(
@@ -736,9 +704,8 @@ class TestC2ICalculator:
 
         # Step 5: Verify output
         results = read(str(output_file))
-        assert "sample_000_chi" in results
-        assert "sample_001_chi" in results
-        assert results["sample_000_chi"].shape == (10,)
+        assert "chi" in results
+        assert results["chi"].shape == (2, 10)
 
     def test_path_as_string_conversion(
         self,

@@ -417,10 +417,8 @@ class TestC2IComputeCommand:
 
         # Verify output content
         data = read(str(output_file))
-        assert "sample_000_chi" in data
-        assert "sample_001_chi" in data
-        assert data["sample_000_chi"].shape == (10,)
-        assert data["sample_001_chi"].shape == (10,)
+        assert "chi" in data
+        assert data["chi"].shape == (2, 10)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_multiple_computations(
@@ -501,10 +499,8 @@ class TestC2IComputeCommand:
 
         # Verify both computations in output
         data = read(str(output_file))
-        assert "sample_000_chi" in data
-        assert "sample_000_H" in data
-        assert "sample_001_chi" in data
-        assert "sample_001_H" in data
+        assert "chi" in data
+        assert "H" in data
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_with_2d_computation(
@@ -579,8 +575,8 @@ class TestC2IComputeCommand:
 
         # Verify 2D output shape
         data = read(str(output_file))
-        assert "sample_000_P_lin" in data
-        assert data["sample_000_P_lin"].shape == (5, 20)
+        assert "P_lin" in data
+        assert data["P_lin"].shape == (2, 5, 20)
 
     def test_c2i_group_help(
         self,
@@ -714,9 +710,8 @@ class TestC2IComputeCommand:
 
         # Verify output
         data = read(str(output_file))
-        assert "sample_000_chi" in data
-        assert "sample_001_chi" in data
-        assert "sample_002_chi" in data
+        assert "chi" in data
+        assert data["chi"].shape == (3, 10)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_shows_cosmology_info_verbose(
@@ -855,14 +850,9 @@ class TestC2IComputeCommand:
 
         # Verify correct number of samples in output
         data = read(str(output_file))
-        sample_keys = [k for k in data.keys() if k.startswith("sample_")]
-        # Should have n_samples * n_computations keys
-        # In this case: 5 samples * 1 computation (chi) = 5 keys
-        assert len(sample_keys) == n_samples
 
-        # Verify specific samples exist
-        for i in range(n_samples):
-            assert f"sample_{i:03d}_chi" in data
+        assert "chi" in data
+        assert data["chi"].shape == (5, 10)
 
     def test_c2i_no_subcommand(
         self,
@@ -982,8 +972,8 @@ class TestC2IComputeCommand:
 
         # Verify all samples processed
         data = read(str(output_file))
-        sample_keys = [k for k in data.keys() if k.startswith("sample_") and k.endswith("_chi")]
-        assert len(sample_keys) == n_samples
+        assert "chi" in data
+        assert data["chi"].shape == (100, 10)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_single_sample(
@@ -1028,8 +1018,8 @@ class TestC2IComputeCommand:
 
         # Verify single sample output
         data = read(str(output_file))
-        assert "sample_000_chi" in data
-        assert "sample_001_chi" not in data
+        assert "chi" in data
+        assert data["chi"].shape == (1, 10)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_output_file_creation(

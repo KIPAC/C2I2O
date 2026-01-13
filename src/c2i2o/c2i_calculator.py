@@ -188,10 +188,8 @@ class C2ICalculator(BaseModel):
             ...
 
         Output file format (HDF5):
-            sample_000_chi: (n_grid_points,) float64
-            sample_000_P_lin: (n_a_points, n_k_points) float64
-            sample_001_chi: (n_grid_points,) float64
-            sample_001_P_lin: (n_a_points, n_k_points) float64
+            chi: (n_samples, n_grid_points,) float64
+            P_lin: (n_samples, n_a_points, n_k_points) float64
             ...
         """
         input_file = Path(input_file)
@@ -209,22 +207,24 @@ class C2ICalculator(BaseModel):
         intermediate_sets = self.compute(params)
 
         # Prepare output data structure
-        # Flatten to top-level: sample_XXX_intermediate_name: array
-        output_data: dict[str, np.ndarray] = {}
+        output_data: dict[str, list[np.ndarray]] = {}
 
-        for i, intermediate_set in enumerate(intermediate_sets):
+        for _i, intermediate_set in enumerate(intermediate_sets):
             for name, intermediate in intermediate_set.intermediates.items():
-                # Create flattened key
-                key = f"sample_{i:03d}_{name}"
-                output_data[key] = cast(NumpyTensor, intermediate.tensor).values
+                if name in output_data:
+                    output_data[name].append(cast(NumpyTensor, intermediate.tensor).values)
+                else:
+                    output_data[name] = [cast(NumpyTensor, intermediate.tensor).values]
+
+        write_data: dict[str, np.ndarray] = {key: np.array(val) for key, val in output_data.items()}
 
         # Write to output file
         try:
-            write(output_data, str(output_file), **kwargs)
+            write(write_data, str(output_file), **kwargs)
         except Exception as e:  # pragma: no cover
             raise RuntimeError(f"Failed to write intermediates to {output_file}: {e}") from e
 
-    def compute_to_dict(self, params: dict[str, np.ndarray]) -> dict[str, dict[str, np.ndarray]]:
+    def compute_to_dict(self, params: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         """Compute intermediates and return as nested dictionary.
 
         This is a convenience method that returns the results in a simple
@@ -237,34 +237,31 @@ class C2ICalculator(BaseModel):
 
         Returns
         -------
-            Nested dictionary with structure:
-            {
-                "sample_000": {"chi": array, "P_lin": array, ...},
-                "sample_001": {"chi": array, "P_lin": array, ...},
-                ...
-            }
+            Dictionary with structure:
+            {"chi": array, "P_lin": array, ...},
 
         Examples
         --------
         >>> params = {"Omega_c": np.array([0.25, 0.26])}
         >>> results = calculator.compute_to_dict(params)
-        >>> results["sample_000"]["chi"]
+        >>> results["chi"]
         array([...])
         """
         intermediate_sets = self.compute(params)
 
-        output_dict: dict[str, dict[str, np.ndarray]] = {}
+        # Prepare output data structure
+        output_data: dict[str, list[np.ndarray]] = {}
 
-        for i, intermediate_set in enumerate(intermediate_sets):
-            sample_name = f"sample_{i:03d}"
-            sample_data = {}
-
+        for _i, intermediate_set in enumerate(intermediate_sets):
             for name, intermediate in intermediate_set.intermediates.items():
-                sample_data[name] = cast(NumpyTensor, intermediate.tensor).values
 
-            output_dict[sample_name] = sample_data
+                if name in output_data:
+                    output_data[name].append(cast(NumpyTensor, intermediate.tensor).values)
+                else:
+                    output_data[name] = [cast(NumpyTensor, intermediate.tensor).values]
 
-        return output_dict
+        write_data: dict[str, np.ndarray] = {key: np.array(val) for key, val in output_data.items()}
+        return write_data
 
     def to_yaml(self, filepath: str | Path) -> None:
         """Save calculator configuration to YAML file.
