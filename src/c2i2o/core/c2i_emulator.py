@@ -1,162 +1,139 @@
-"""C2I Emulator for cosmology to intermediates in c2i2o.
+"""Abstract base class for C2I emulators in c2i2o.
 
-This module provides an emulator that learns the mapping from cosmological
-parameters to intermediate data products, enabling fast approximations of
-expensive cosmological computations.
+This module provides the base class for emulators that learn the mapping from
+cosmological parameters to intermediate data products.
 """
 
+from typing import Annotated
+
+from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from c2i2o.core.emulator import EmulatorBase
+from c2i2o.core.grid import GridBase
 from c2i2o.core.intermediate import IntermediateSet
+
 from c2i2o.interfaces.ccl.cosmology import (
     CCLCosmology,
     CCLCosmologyCalculator,
     CCLCosmologyVanillaLCDM,
 )
-from c2i2o.interfaces.ccl.intermediate_calculator import CCLCosmologyUnion
+
+CCLCosmologyUnion = Annotated[
+    CCLCosmology | CCLCosmologyVanillaLCDM | CCLCosmologyCalculator,
+    Field(discriminator="cosmology_type"),
+]
 
 
-class C2IEmulator(EmulatorBase[dict[str, np.ndarray], IntermediateSet]):
-    """Emulator for cosmology to intermediates mapping.
 
-    This emulator learns to approximate the expensive computation from
-    cosmological parameters to intermediate data products (e.g., distances,
-    power spectra). It uses the CCL cosmology framework and can emulate
-    multiple intermediate quantities simultaneously.
+class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
+    """Abstract base class for cosmology-to-intermediate emulators.
 
-    Type Parameters
-    ----------------
-    InputType : dict[str, np.ndarray]
-        Dictionary mapping parameter names to arrays of parameter values.
-    OutputType : IntermediateSet
-        Set of intermediate data products.
+    This class defines the interface for emulators that learn the mapping from
+    cosmological parameters to intermediate data products. Concrete implementations
+    can use different backends (neural networks, Gaussian processes, etc.).
 
     Attributes
     ----------
-    emulator_type
-        Type identifier, always "c2i".
+    name
+        Name identifier for the emulator (inherited from EmulatorBase).
     baseline_cosmology
-        Baseline CCL cosmology configuration used for training.
-    intermediate_names
-        List of intermediate quantity names to emulate.
-    training_samples
-        Number of training samples used (set during training).
+        Reference cosmology used as baseline for parameter variations.
+    grids
+        Dictionary mapping intermediate names to their grids.
+        The keys define which intermediates this emulator handles.
+    emulator_type
+        String identifier for the emulator implementation type (inherited).
+    is_trained
+        Whether the emulator has been trained (inherited).
 
     Examples
     --------
-    >>> from c2i2o.interfaces.ccl.cosmology import CCLCosmologyVanillaLCDM
-    >>>
-    >>> # Create emulator configuration
-    >>> baseline = CCLCosmologyVanillaLCDM(
-    ...     Omega_c=0.25, Omega_b=0.05, h=0.67, sigma8=0.8, n_s=0.96
-    ... )
-    >>> emulator = C2IEmulator(
-    ...     name="my_emulator",
-    ...     baseline_cosmology=baseline,
-    ...     intermediate_names=["chi", "P_lin"],
-    ... )
-    >>>
-    >>> # Train (to be implemented)
-    >>> train_params = {
-    ...     "Omega_c": np.linspace(0.2, 0.3, 100),
-    ...     "sigma8": np.linspace(0.7, 0.9, 100),
-    ... }
-    >>> train_intermediates = ...  # IntermediateSet from expensive calculation
-    >>> emulator.train(train_params, train_intermediates)
-    >>>
-    >>> # Emulate (to be implemented)
-    >>> test_params = {
-    ...     "Omega_c": np.array([0.25]),
-    ...     "sigma8": np.array([0.8]),
-    ... }
-    >>> result = emulator.emulate(test_params)
-    >>> result["chi"]
-    <IntermediateBase object>
-
-    Notes
-    -----
-    This is a partial implementation. Subclasses or future versions should
-    implement:
-    - Specific emulation algorithms (e.g., Gaussian Process, Neural Network)
-    - Training logic in train()
-    - Evaluation logic in emulate()
-    - Serialization in save() and load()
+    >>> # Subclass implementation
+    >>> class MyC2IEmulator(C2IEmulator):
+    ...     emulator_type = "my_emulator"
+    ...
+    ...     def __init__(self, **kwargs):
+    ...         # Initialize with empty grids for expected intermediates
+    ...         intermediate_names = kwargs.pop('intermediate_names', [])
+    ...         if 'grids' not in kwargs:
+    ...             kwargs['grids'] = {name: None for name in intermediate_names}
+    ...         super().__init__(**kwargs)
+    ...
+    ...     def train(self, input_data, output_data, **kwargs):
+    ...         # Validate input/output
+    ...         self._validate_input_data(input_data)
+    ...         self._validate_output_data(output_data)
+    ...         
+    ...         # Store grids from output_data
+    ...         for intermediate_name in self.intermediate_names:
+    ...             grid = output_data[0].intermediates[intermediate_name].tensor.grid
+    ...             self.grids[intermediate_name] = grid
+    ...         
+    ...         # Training logic...
+    ...         self.is_trained = True
     """
 
-    emulator_type: Literal["c2i"] = Field(
-        default="c2i",
-        description="Type identifier for C2I emulator",
-    )
-
+    # Fields specific to C2I emulators
     baseline_cosmology: CCLCosmologyUnion = Field(
         ...,
         description="Baseline CCL cosmology configuration",
     )
-
-    intermediate_names: list[str] = Field(
-        ...,
-        min_length=1,
-        description="Names of intermediate quantities to emulate",
+    grids: dict[str, GridBase | None] = Field(
+        default_factory=dict,
+        description="Grids for each intermediate quantity (None before training)"
     )
 
-    training_samples: int | None = Field(
-        default=None,
-        description="Number of training samples (set during training)",
-    )
-
-    @field_validator("intermediate_names")
-    @classmethod
-    def validate_unique_names(cls, v: list[str]) -> list[str]:
-        """Validate that intermediate names are unique.
-
-        Parameters
-        ----------
-        v
-            List of intermediate names.
+    @property
+    def intermediate_names(self) -> list[str]:
+        """Get list of intermediate names.
 
         Returns
         -------
-            Validated list of names.
-
-        Raises
-        ------
-        ValueError
-            If duplicate names found.
+            Sorted list of intermediate quantity names.
+            Derived from the keys of the grids dictionary.
         """
-        if len(v) != len(set(v)):
-            raise ValueError("Intermediate names must be unique")
-        return v
+        return sorted(self.grids.keys())
 
-    @field_validator("intermediate_names")
-    @classmethod
-    def validate_names_not_empty(cls, v: list[str]) -> list[str]:
-        """Validate that intermediate names are not empty strings.
+    def _get_grid_shape(self, grid: GridBase) -> tuple[int, ...]:
+        """Get the shape of a grid.
+
+        This is a helper method that concrete emulators can use to get the
+        shape from various grid types.
 
         Parameters
         ----------
-        v
-            List of intermediate names.
+        grid
+            Grid object.
 
         Returns
         -------
-            Validated list of names.
+            Shape tuple.
 
-        Raises
-        ------
-        ValueError
-            If any name is empty.
+        Examples
+        --------
+        >>> from c2i2o.core.grid import Grid1D
+        >>> emulator = MyC2IEmulator(...)  # assume properly initialized
+        >>> grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        >>> emulator._get_grid_shape(grid)
+        (11,)
         """
-        if any(not name.strip() for name in v):
-            raise ValueError("Intermediate names cannot be empty strings")
-        return v
+        from c2i2o.core.grid import Grid1D, ProductGrid
+
+        if isinstance(grid, Grid1D):
+            return (grid.n_points,)
+        elif isinstance(grid, ProductGrid):
+            return tuple(grid.grids[name].n_points for name in grid.dimension_names)
+        else:
+            # Fallback for other grid types
+            return getattr(grid, 'shape', ())
 
     def _validate_input_data(self, input_data: dict[str, np.ndarray]) -> None:
-        """Validate input parameter data and set input_shape.
+        """Validate input data format.
 
         Parameters
         ----------
@@ -166,245 +143,223 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], IntermediateSet]):
         Raises
         ------
         ValueError
-            If input data is invalid (empty dict, inconsistent array lengths,
-            non-1D arrays).
+            If input data format is invalid.
         """
-        if not input_data:
-            raise ValueError("Input data cannot be empty")
+        if not isinstance(input_data, dict):
+            raise ValueError(f"Input data must be a dictionary, got {type(input_data)}")
+        
+        # Store input shape on first validation (during training)
+        if self.input_shape is None:
+            self.input_shape = sorted(input_data.keys())
+        
+        for name, values in input_data.items():
+            if not isinstance(values, np.ndarray):
+                raise ValueError(f"Parameter '{name}' must be a numpy array, got {type(values)}")
+            if values.ndim != 1:
+                raise ValueError(f"Parameter '{name}' must be 1D, got shape {values.shape}")
 
-        # Check all values are 1D arrays
-        for name, arr in input_data.items():
-            if not isinstance(arr, np.ndarray):
-                raise ValueError(f"Parameter '{name}' must be a NumPy array")
-            if arr.ndim != 1:
-                raise ValueError(f"Parameter '{name}' must be 1D, got shape {arr.shape}")
-
-        # Check all arrays have same length
-        lengths = [len(arr) for arr in input_data.values()]
-        if len(set(lengths)) > 1:
-            raise ValueError(
-                f"All parameter arrays must have same length, got lengths: {dict(zip(input_data.keys(), lengths))}"
-            )
-
-        # Store input shape as dict of parameter names
-        self.input_shape = sorted(input_data.keys())
-
-    def _validate_output_data(self, output_data: IntermediateSet) -> None:
-        """Validate output intermediate data and set output_shape.
+    def _validate_output_data(self, output_data: list[IntermediateSet]) -> None:
+        """Validate output data format.
 
         Parameters
         ----------
         output_data
-            IntermediateSet containing intermediate products.
+            List of IntermediateSet objects.
 
         Raises
         ------
         ValueError
-            If output data is invalid (wrong intermediate names, empty set).
+            If output data format is invalid.
         """
+        if not isinstance(output_data, list):
+            raise ValueError(f"Output data must be a list, got {type(output_data)}")
+        
         if len(output_data) == 0:
-            raise ValueError("Output IntermediateSet cannot be empty")
+            raise ValueError("Output data list is empty")
+        
+        for i, iset in enumerate(output_data):
+            if not isinstance(iset, IntermediateSet):
+                raise ValueError(f"output_data[{i}] must be IntermediateSet, got {type(iset)}")
+            
+            # Check that required intermediates are present
+            iset_names = set(iset.intermediates.keys())
+            expected_names = set(self.intermediate_names)
+            if iset_names != expected_names:
+                raise ValueError(
+                    f"IntermediateSet[{i}] has intermediates {iset_names}, "
+                    f"expected {expected_names}"
+                )
+        
+        # Store output shape on first validation (during training)
+        if self.output_shape is None:
+            self.output_shape = {
+                name: list(self._get_grid_shape(output_data[0].intermediates[name].tensor.grid))
+                for name in self.intermediate_names
+            }
 
-        # Check that output contains expected intermediates
-        output_names = set(output_data.intermediates.keys())
-        expected_names = set(self.intermediate_names)
-
-        if output_names != expected_names:
-            missing = expected_names - output_names
-            extra = output_names - expected_names
-            msg_parts = []
-            if missing:
-                msg_parts.append(f"missing {missing}")
-            if extra:
-                msg_parts.append(f"unexpected {extra}")
-            raise ValueError(f"Output intermediates mismatch: {', '.join(msg_parts)}")
-
-        # Store output shape as dict mapping names to tensor shapes
-        self.output_shape = {
-            name: intermediate.tensor.shape for name, intermediate in output_data.intermediates.items()
-        }
-
+    @abstractmethod
     def train(
         self,
         input_data: dict[str, np.ndarray],
-        output_data: IntermediateSet,
+        output_data: list[IntermediateSet],
         **kwargs: Any,
     ) -> None:
-        """Train the emulator on input parameters and output intermediates.
+        """Train the emulator on cosmological parameter variations.
 
         Parameters
         ----------
         input_data
-            Dictionary mapping parameter names to arrays of training values.
-            All arrays must have shape (n_samples,).
+            Dictionary mapping cosmological parameter names to arrays of values.
+            Each array should have shape (n_samples,) where n_samples is the
+            number of training cosmologies.
         output_data
-            IntermediateSet containing the corresponding intermediate products.
+            List of IntermediateSet objects, one per training sample.
+            Each IntermediateSet contains the intermediate quantities computed
+            for the corresponding cosmology.
         **kwargs
-            Additional training parameters (e.g., validation_split, epochs).
-
-        Raises
-        ------
-        ValueError
-            If input or output data is invalid.
+            Additional training parameters specific to the emulator implementation.
 
         Notes
         -----
-        This is a placeholder implementation. Subclasses should implement
-        the actual training logic using their chosen emulation method
-        (e.g., Gaussian Process, Neural Network).
+        Implementations should:
+        - Call self._validate_input_data(input_data)
+        - Call self._validate_output_data(output_data)
+        - Extract and store grid information from output_data into self.grids
+        - Set self.is_trained = True after successful training
+
+        Examples
+        --------
+        >>> emulator = MyC2IEmulator(
+        ...     name="test",
+        ...     baseline_cosmology=cosmo,
+        ...     grids={"P_lin": None, "chi": None}  # Declare expected intermediates
+        ... )
+        >>> input_data = {
+        ...     "Omega_c": np.array([0.25, 0.26, 0.27]),
+        ...     "sigma8": np.array([0.8, 0.81, 0.82])
+        ... }
+        >>> # output_data = [iset1, iset2, iset3]  # IntermediateSets
+        >>> emulator.train(input_data, output_data, epochs=100)
         """
-        # Validate inputs and outputs
-        self._validate_input_data(input_data)
-        self._validate_output_data(output_data)
+        pass
 
-        # Store number of training samples
-        self.training_samples = len(next(iter(input_data.values())))
-
-        # TODO: Implement actual training logic
-        # This would typically involve:
-        # 1. Preprocessing/normalization of input data
-        # 2. Extracting tensor values from IntermediateSet
-        # 3. Training emulation model(s) for each intermediate
-        # 4. Computing validation metrics if validation_split provided
-        # 5. Storing trained model parameters
-
-        self.is_trained = True
-
+    @abstractmethod
     def emulate(
         self,
         input_data: dict[str, np.ndarray],
         **kwargs: Any,
-    ) -> IntermediateSet:
-        """Apply the trained emulator to new parameter values.
+    ) -> list[IntermediateSet]:
+        """Emulate intermediate quantities for new cosmological parameters.
 
         Parameters
         ----------
         input_data
-            Dictionary mapping parameter names to arrays of values to emulate.
-            Must contain same parameters as training data.
+            Dictionary mapping cosmological parameter names to arrays of values.
+            Must contain the same parameter names as used during training.
         **kwargs
-            Additional evaluation parameters.
+            Additional evaluation parameters specific to the emulator implementation.
 
         Returns
         -------
-            IntermediateSet containing emulated intermediate products.
+            List of IntermediateSet objects, one per input sample.
+            Each IntermediateSet contains emulated intermediate quantities
+            defined on the grids stored in self.grids.
 
         Raises
         ------
         RuntimeError
-            If emulator has not been trained.
-        ValueError
-            If input_data does not match expected parameters.
+            If the emulator has not been trained yet.
 
         Notes
         -----
-        This is a placeholder implementation. Subclasses should implement
-        the actual emulation logic.
+        Implementations should:
+        - Check self.is_trained
+        - Validate input_data matches training parameters
+        - Use self.grids to create output tensors
+
+        Examples
+        --------
+        >>> emulator = MyC2IEmulator(...)
+        >>> # ... train emulator ...
+        >>> test_data = {
+        ...     "Omega_c": np.array([0.255]),
+        ...     "sigma8": np.array([0.805])
+        ... }
+        >>> result = emulator.emulate(test_data)
+        >>> len(result)
+        1
         """
-        self._check_is_trained()
+        pass
 
-        # Validate input matches training
-        if self.input_shape is None:
-            raise RuntimeError("Emulator has no stored input_shape")
-
-        input_params = sorted(input_data.keys())
-        if input_params != self.input_shape:
-            raise ValueError(
-                f"Input parameters {input_params} do not match "
-                f"training parameters {self.input_shape}"
-            )
-
-        # Validate array dimensions
-        for name, arr in input_data.items():
-            if not isinstance(arr, np.ndarray):
-                raise ValueError(f"Parameter '{name}' must be a NumPy array")
-            if arr.ndim != 1:
-                raise ValueError(f"Parameter '{name}' must be 1D, got shape {arr.shape}")
-
-        # TODO: Implement actual emulation logic
-        # This would typically involve:
-        # 1. Preprocessing input data (same as training)
-        # 2. Evaluating emulation model(s) for each intermediate
-        # 3. Constructing IntermediateSet from predictions
-        # 4. Postprocessing/denormalization
-
-        raise NotImplementedError("Emulation logic not yet implemented")
-
+    @abstractmethod
     def save(self, filepath: str | Path, **kwargs: Any) -> None:
         """Save the trained emulator to disk.
 
         Parameters
         ----------
         filepath
-            Path where the emulator model should be saved.
+            Path where the emulator should be saved. Can be a file or directory
+            depending on the implementation.
         **kwargs
-            Additional save parameters (e.g., compression).
+            Additional save parameters.
 
         Raises
         ------
         RuntimeError
-            If emulator has not been trained.
+            If the emulator has not been trained yet.
 
         Notes
         -----
-        This is a placeholder implementation. Subclasses should implement
-        serialization of:
-        - Model weights/parameters
-        - input_shape and output_shape
-        - baseline_cosmology configuration
-        - intermediate_names list
-        - Preprocessing/normalization parameters
+        Implementations should save all necessary information to reconstruct
+        the emulator, including configuration, trained parameters, grid
+        information (from self.grids), and any normalization constants.
+
+        Examples
+        --------
+        >>> emulator = MyC2IEmulator(...)
+        >>> # ... train emulator ...
+        >>> emulator.save("my_emulator.pkl")
         """
-        self._check_is_trained()
-
-        filepath = Path(filepath)
-
-        # TODO: Implement serialization
-        # Suggested approach:
-        # 1. Use pickle or joblib for Python objects
-        # 2. Use HDF5 for large arrays (via tables_io)
-        # 3. Use YAML for metadata and configuration
-        # 4. Save model-specific parameters (GP hyperparameters, NN weights, etc.)
-
-        raise NotImplementedError("Save logic not yet implemented")
+        pass
 
     @classmethod
+    @abstractmethod
     def load(cls, filepath: str | Path, **kwargs: Any) -> "C2IEmulator":
         """Load a trained emulator from disk.
 
         Parameters
         ----------
         filepath
-            Path to the saved emulator model.
+            Path to the saved emulator.
         **kwargs
             Additional load parameters.
 
         Returns
         -------
-            Loaded C2IEmulator instance.
+            Loaded emulator instance ready for emulation.
 
         Raises
         ------
         FileNotFoundError
-            If filepath does not exist.
+            If the specified filepath does not exist.
 
         Notes
         -----
-        This is a placeholder implementation. Subclasses should implement
-        deserialization matching the save() format.
+        Implementations should restore all emulator state including grids,
+        allowing immediate use for emulation without retraining.
+
+        Examples
+        --------
+        >>> emulator = MyC2IEmulator.load("my_emulator.pkl")
+        >>> result = emulator.emulate(test_data)
         """
-        filepath = Path(filepath)
-
-        if not filepath.exists():
-            raise FileNotFoundError(f"Emulator file not found: {filepath}")
-
-        # TODO: Implement deserialization
-        # Should load all data saved by save() and reconstruct emulator
-
-        raise NotImplementedError("Load logic not yet implemented")
+        pass
 
     class Config:
         """Pydantic configuration."""
 
         arbitrary_types_allowed = True
         extra = "forbid"
+
+
+__all__ = ["C2IEmulator"]

@@ -1,20 +1,24 @@
-"""TensorFlow implementation of C2I emulator for c2i2o.
-
-This module provides a neural network-based emulator using TensorFlow/Keras
-to learn the mapping from cosmological parameters to intermediate data products.
-"""
+"""TensorFlow implementation of C2I emulator for c2i2o."""
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import Field, field_validator
+from pydantic import Field
+import yaml
 
 from c2i2o.core.c2i_emulator import C2IEmulator
 from c2i2o.core.grid import Grid1D, ProductGrid
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message="In the future `np.object` will be defined as the corresponding NumPy scalar",
+)    
 try:
     import tensorflow as tf
     from tensorflow import keras
@@ -35,196 +39,56 @@ class TFC2IEmulator(C2IEmulator):
     Attributes
     ----------
     emulator_type
-        Always "tf_c2i".
+        Always "tf_c2i" for this implementation.
     hidden_layers
         List of hidden layer sizes for the neural networks.
-    activation
-        Activation function for hidden layers.
     learning_rate
         Learning rate for Adam optimizer.
-    batch_size
-        Batch size for training.
-    epochs
-        Number of training epochs.
-    validation_split
-        Fraction of data to use for validation.
+    activation
+        Activation function for hidden layers.
     models
         Dictionary mapping intermediate names to trained Keras models.
     normalizers
-        Dictionary storing input/output normalization parameters.
+        Dictionary containing normalization parameters.
+    training_samples
+        Number of training samples used.
+    input_shape
+        List of input parameter names (inherited).
+    intermediate_names
+        List of intermediate names (property from grids.keys()).
 
     Examples
     --------
     >>> from c2i2o.interfaces.ccl.cosmology import CCLCosmologyVanillaLCDM
-    >>> import numpy as np
-    >>>
-    >>> # Create emulator
-    >>> baseline = CCLCosmologyVanillaLCDM(
-    ...     Omega_c=0.25, Omega_b=0.05, h=0.67, sigma8=0.8, n_s=0.96
-    ... )
+    >>> cosmo = CCLCosmologyVanillaLCDM()
     >>> emulator = TFC2IEmulator(
-    ...     name="my_nn_emulator",
-    ...     baseline_cosmology=baseline,
-    ...     intermediate_names=["chi", "P_lin"],
-    ...     hidden_layers=[64, 64, 32],
-    ...     epochs=100,
+    ...     name="test_emulator",
+    ...     baseline_cosmology=cosmo,
+    ...     grids={"P_lin": None, "chi": None},  # Declare intermediates before training
+    ...     hidden_layers=[64, 32],
     ... )
-    >>>
-    >>> # Train
-    >>> train_params = {
-    ...     "Omega_c": np.random.uniform(0.2, 0.3, 1000),
-    ...     "sigma8": np.random.uniform(0.7, 0.9, 1000),
-    ... }
-    >>> # ... compute train_intermediates_list from expensive calculation
-    >>> emulator.train(train_params, train_intermediates_list)
-    >>>
-    >>> # Emulate
-    >>> test_params = {"Omega_c": np.array([0.25]), "sigma8": np.array([0.8])}
-    >>> result = emulator.emulate(test_params)
-
-    Notes
-    -----
-    - Each intermediate is emulated by a separate neural network
-    - Input parameters are normalized to zero mean and unit variance
-    - Output values are normalized similarly
-    - Uses mean squared error loss and Adam optimizer
-    - Supports GPU acceleration via TensorFlow
+    >>> # Train emulator...
+    >>> emulator.train(input_data, output_data, epochs=50)
     """
 
-    emulator_type: Literal["tf_c2i"] = Field(
-        default="tf_c2i",
-        description="TensorFlow C2I emulator type",
-    )
+    emulator_type: Literal["tf_c2i"] = "tf_c2i"
+    hidden_layers: list[int] = Field(default=[128, 64, 32], description="Hidden layer sizes")
+    learning_rate: float = Field(default=0.001, description="Learning rate for optimizer")
+    activation: str = Field(default="relu", description="Activation function")
+    models: dict[str, Any] = Field(default_factory=dict, description="Trained models")
+    normalizers: dict[str, np.ndarray] | None = Field(default=None, description="Normalization parameters")
+    training_samples: int | None = Field(default=None, description="Number of training samples")
 
-    hidden_layers: list[int] = Field(
-        default=[128, 128, 64],
-        description="Hidden layer sizes for neural networks",
-    )
-
-    activation: str = Field(
-        default="relu",
-        description="Activation function for hidden layers",
-    )
-
-    learning_rate: float = Field(
-        default=0.001,
-        gt=0.0,
-        description="Learning rate for Adam optimizer",
-    )
-
-    batch_size: int = Field(
-        default=32,
-        gt=0,
-        description="Batch size for training",
-    )
-
-    epochs: int = Field(
-        default=100,
-        gt=0,
-        description="Number of training epochs",
-    )
-
-    validation_split: float = Field(
-        default=0.2,
-        ge=0.0,
-        lt=1.0,
-        description="Fraction of data for validation",
-    )
-
-    models: dict[str, Any] | None = Field(
-        default=None,
-        description="Trained Keras models for each intermediate",
-    )
-
-    normalizers: dict[str, dict[str, Any]] | None = Field(
-        default=None,
-        description="Normalization parameters for inputs and outputs",
-    )
-
-    @field_validator("hidden_layers")
-    @classmethod
-    def validate_hidden_layers(cls, v: list[int]) -> list[int]:
-        """Validate hidden layer specification.
-
-        Parameters
-        ----------
-        v
-            List of hidden layer sizes.
-
-        Returns
-        -------
-            Validated list.
+    def _check_is_trained(self) -> None:
+        """Check if the emulator has been trained.
 
         Raises
         ------
-        ValueError
-            If any layer size is non-positive.
+        RuntimeError
+            If the emulator has not been trained.
         """
-        if not v:
-            raise ValueError("Must specify at least one hidden layer")
-        if any(size <= 0 for size in v):
-            raise ValueError("All hidden layer sizes must be positive")
-        return v
-
-    def _normalize_inputs(self, params: dict[str, np.ndarray]) -> np.ndarray:
-        """Normalize input parameters to zero mean and unit variance.
-
-        Parameters
-        ----------
-        params
-            Dictionary of parameter arrays.
-
-        Returns
-        -------
-            Normalized parameter array of shape (n_samples, n_params).
-        """
-        # Stack parameters in consistent order
-        param_names = sorted(params.keys())
-        param_array = np.column_stack([params[name] for name in param_names])
-
-        if self.normalizers is None or "input_mean" not in self.normalizers:
-            # First time: compute normalization parameters
-            input_mean = np.mean(param_array, axis=0)
-            input_std = np.std(param_array, axis=0)
-
-            # Avoid division by zero
-            input_std = np.where(input_std > 1e-10, input_std, 1.0)
-
-            if self.normalizers is None:
-                self.normalizers = {}
-
-            self.normalizers["input_mean"] = input_mean
-            self.normalizers["input_std"] = input_std
-            self.normalizers["param_names"] = param_names
-        else:
-            # Use existing normalization
-            input_mean = self.normalizers["input_mean"]
-            input_std = self.normalizers["input_std"]
-
-        return (param_array - input_mean) / input_std
-
-    def _denormalize_outputs(self, normalized: np.ndarray, intermediate_name: str) -> np.ndarray:
-        """Denormalize output values back to physical units.
-
-        Parameters
-        ----------
-        normalized
-            Normalized output values.
-        intermediate_name
-            Name of the intermediate quantity.
-
-        Returns
-        -------
-            Denormalized values.
-        """
-        if self.normalizers is None:
-            raise RuntimeError("No normalization parameters available")
-
-        output_key = f"output_{intermediate_name}"
-        mean = self.normalizers[f"{output_key}_mean"]
-        std = self.normalizers[f"{output_key}_std"]
-
-        return normalized * std + mean
+        if not self.models or self.normalizers is None:
+            raise RuntimeError(f"Emulator '{self.name}' has not been trained yet")
 
     def _build_model(self, input_dim: int, output_dim: int) -> Any:
         """Build a Keras neural network model.
@@ -281,155 +145,155 @@ class TFC2IEmulator(C2IEmulator):
         Parameters
         ----------
         input_data
-            Dictionary mapping parameter names to training values.
-            All arrays must have shape (n_samples,).
+            Dictionary mapping parameter names to arrays of values.
+            Each array should have shape (n_samples,).
         output_data
             List of IntermediateSet objects, one per training sample.
+            Each IntermediateSet must contain all intermediates specified
+            in self.intermediate_names.
         **kwargs
-            Additional training parameters:
-            - verbose (int): Keras verbosity level (0, 1, or 2)
-            - early_stopping (bool): Use early stopping callback
+            Additional arguments passed to Keras model.fit():
+            - epochs: Number of training epochs (default: 100)
+            - batch_size: Batch size (default: 32)
+            - validation_split: Fraction of data for validation (default: 0.0)
+            - verbose: Verbosity level (default: 1)
+            - early_stopping: Whether to use early stopping (default: False)
+            - patience: Patience for early stopping (default: 10)
 
         Raises
         ------
         ValueError
-            If input or output data is invalid.
+            If input and output data dimensions don't match.
         ImportError
             If TensorFlow is not installed.
         """
         if not TF_AVAILABLE:
             raise ImportError("TensorFlow is required for TFC2IEmulator. Install with: pip install tensorflow")
 
-        # Validate inputs
+        # Validate input and output data
         self._validate_input_data(input_data)
+        self._validate_output_data(output_data)
 
-        # Validate output is list of IntermediateSet
-        if not isinstance(output_data, list):
-            raise ValueError("output_data must be a list of IntermediateSet objects")
+        # Extract training parameters
+        epochs = kwargs.pop("epochs", 100)
+        batch_size = kwargs.pop("batch_size", 32)
+        validation_split = kwargs.pop("validation_split", 0.0)
+        verbose = kwargs.pop("verbose", 1)
+        early_stopping = kwargs.pop("early_stopping", False)
+        patience = kwargs.pop("patience", 10)
 
+        # Validate input dimensions
         n_samples = len(next(iter(input_data.values())))
         if len(output_data) != n_samples:
             raise ValueError(
-                f"Number of output IntermediateSets ({len(output_data)}) must match number of input samples ({n_samples})"
+                f"Number of output IntermediateSets ({len(output_data)}) "
+                f"does not match number of input samples ({n_samples})"
             )
 
-        # Validate each IntermediateSet has the required intermediates
-        for i, iset in enumerate(output_data):
-            if not isinstance(iset, IntermediateSet):
-                raise ValueError(f"output_data[{i}] must be an IntermediateSet, got {type(iset)}")
-
-            iset_names = set(iset.intermediates.keys())
-            expected_names = set(self.intermediate_names)
-            if iset_names != expected_names:
-                raise ValueError(
-                    f"IntermediateSet[{i}] has intermediates {iset_names}, "
-                    f"expected {expected_names}"
-                )
-
-        # Store training samples
-        self.training_samples = n_samples
+        # Stack input parameters into matrix (using sorted order from input_shape)
+        X = np.stack([input_data[name] for name in self.input_shape], axis=1)
 
         # Normalize inputs
-        X_train = self._normalize_inputs(input_data)
-        input_dim = X_train.shape[1]
+        input_mean = np.mean(X, axis=0)
+        input_std = np.std(X, axis=0)
+        input_std = np.where(input_std > 1e-10, input_std, 1.0)
+        X_normalized = (X - input_mean) / input_std
 
-        # Initialize models dictionary
-        self.models = {}
-
-        # Get training parameters from kwargs
-        verbose = kwargs.get("verbose", 1)
-        use_early_stopping = kwargs.get("early_stopping", False)
+        # Store normalizers
+        self.normalizers = {
+            "input_mean": input_mean,
+            "input_std": input_std,
+        }
 
         # Train a separate model for each intermediate
         for intermediate_name in self.intermediate_names:
-            print(f"\nTraining model for {intermediate_name}...")
+            if verbose > 0:
+                print(f"\nTraining model for {intermediate_name}...")
 
-            # Extract and stack output values from all IntermediateSets
-            output_values_list = []
-            output_shape = None
-
+            # Extract output values for this intermediate
+            y_list = []
+            grid = None
+            
             for iset in output_data:
                 intermediate = iset.intermediates[intermediate_name]
-                values = intermediate.tensor.values
-                output_values_list.append(values.flatten())
+                
+                # Store grid information (from first sample)
+                if grid is None:
+                    grid = intermediate.tensor.grid
+                
+                # Get flattened tensor values
+                if hasattr(intermediate.tensor, 'flatten'):
+                    values = intermediate.tensor.flatten()
+                else:
+                    values = intermediate.tensor.to_numpy().flatten()
+                y_list.append(values)
 
-                if output_shape is None:
-                    output_shape = values.shape
+            # Stack into matrix
+            Y = np.stack(y_list, axis=0)
 
-            Y_train = np.array(output_values_list)  # Shape: (n_samples, n_grid_points)
-            output_dim = Y_train.shape[1]
+            # Store grid (replace None placeholder)
+            self.grids[intermediate_name] = grid
 
             # Normalize outputs
-            output_mean = np.mean(Y_train, axis=0)
-            output_std = np.std(Y_train, axis=0)
+            output_mean = np.mean(Y, axis=0)
+            output_std = np.std(Y, axis=0)
             output_std = np.where(output_std > 1e-10, output_std, 1.0)
+            Y_normalized = (Y - output_mean) / output_std
 
-            Y_train_normalized = (Y_train - output_mean) / output_std
-
-            # Store normalization parameters
-            output_key = f"output_{intermediate_name}"
-            self.normalizers[f"{output_key}_mean"] = output_mean
-            self.normalizers[f"{output_key}_std"] = output_std
-            self.normalizers[f"{output_key}_shape"] = output_shape
+            # Store output normalizers
+            self.normalizers[f"{intermediate_name}_mean"] = output_mean
+            self.normalizers[f"{intermediate_name}_std"] = output_std
 
             # Build model
+            input_dim = len(self.input_shape)
+            output_dim = Y.shape[1]
             model = self._build_model(input_dim, output_dim)
 
             # Setup callbacks
             callbacks = []
-            if use_early_stopping:
-                early_stop = keras.callbacks.EarlyStopping(
-                    monitor="val_loss",
-                    patience=10,
+            if early_stopping:
+                early_stop_callback = keras.callbacks.EarlyStopping(
+                    monitor="val_loss" if validation_split > 0 else "loss",
+                    patience=patience,
                     restore_best_weights=True,
                 )
-                callbacks.append(early_stop)
+                callbacks.append(early_stop_callback)
 
             # Train model
-            history = model.fit(
-                X_train,
-                Y_train_normalized,
-                batch_size=self.batch_size,
-                epochs=self.epochs,
-                validation_split=self.validation_split,
-                callbacks=callbacks,
+            model.fit(
+                X_normalized,
+                Y_normalized,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_split=validation_split,
                 verbose=verbose,
+                callbacks=callbacks if callbacks else None,
             )
 
             # Store trained model
             self.models[intermediate_name] = model
 
-            # Print training summary
-            final_loss = history.history["loss"][-1]
-            final_val_loss = history.history["val_loss"][-1]
-            print(f"  Final training loss: {final_loss:.6f}")
-            print(f"  Final validation loss: {final_val_loss:.6f}")
-
-        # Store output shape information
-        first_iset = output_data[0]
-        self.output_shape = {
-            name: intermediate.tensor.shape
-            for name, intermediate in first_iset.intermediates.items()
-        }
-
+        # Store number of training samples
+        self.training_samples = n_samples
+        
+        # Mark as trained
         self.is_trained = True
-        print("\nTraining complete!")
 
     def emulate(
         self,
         input_data: dict[str, np.ndarray],
         **kwargs: Any,
     ) -> list[IntermediateSet]:
-        """Emulate intermediate data products using trained neural networks.
+        """Evaluate the emulator at new parameter values.
 
         Parameters
         ----------
         input_data
-            Dictionary mapping parameter names to values to emulate.
-            Must contain same parameters as training data.
+            Dictionary mapping parameter names to arrays of values.
+            Must contain all parameters used during training.
         **kwargs
-            Additional evaluation parameters:
-            - batch_size (int): Batch size for prediction
+            Additional arguments:
+            - batch_size: Batch size for prediction (default: 32)
 
         Returns
         -------
@@ -440,25 +304,18 @@ class TFC2IEmulator(C2IEmulator):
         RuntimeError
             If emulator has not been trained.
         ValueError
-            If input_data does not match expected parameters.
-        ImportError
-            If TensorFlow is not installed.
+            If input parameters don't match training parameters.
         """
-        if not TF_AVAILABLE:
-            raise ImportError("TensorFlow is required for TFC2IEmulator. Install with: pip install tensorflow")
-
         self._check_is_trained()
 
-        # Validate input matches training
-        if self.input_shape is None:
-            raise RuntimeError("Emulator has no stored input_shape")
-
-        input_params = sorted(input_data.keys())
-        if input_params != self.input_shape:
+        # Check that input parameters match training
+        if set(input_data.keys()) != set(self.input_shape):
             raise ValueError(
-                f"Input parameters {input_params} do not match "
-                f"training parameters {self.input_shape}"
+                f"Input parameters {set(input_data.keys())} do not match "
+                f"training parameters {set(self.input_shape)}"
             )
+
+        batch_size = kwargs.pop("batch_size", 32)
 
         # Validate array dimensions
         n_samples = None
@@ -472,85 +329,48 @@ class TFC2IEmulator(C2IEmulator):
             elif len(arr) != n_samples:
                 raise ValueError("All parameter arrays must have same length")
 
-        # Normalize inputs
-        X_pred = self._normalize_inputs(input_data)
+        # Stack and normalize inputs
+        X = np.stack([input_data[name] for name in self.input_shape], axis=1)
+        X_normalized = (X - self.normalizers["input_mean"]) / self.normalizers["input_std"]
 
-        # Get prediction batch size
-        pred_batch_size = kwargs.get("batch_size", 32)
-
-        # Predict each intermediate
-        intermediate_sets = []
+        # Predict for each intermediate
+        result = []
 
         for i in range(n_samples):
-            intermediates_dict = {}
+            intermediates = {}
 
             for intermediate_name in self.intermediate_names:
-                # Get model for this intermediate
+                # Get model and grid
                 model = self.models[intermediate_name]
-
-                # Predict (single sample as batch of 1)
-                X_single = X_pred[i:i+1]
-                Y_pred_normalized = model.predict(X_single, batch_size=1, verbose=0)
+                grid = self.grids[intermediate_name]
+                
+                # Predict
+                y_normalized = model.predict(
+                    X_normalized[i : i + 1], batch_size=1, verbose=0
+                )
 
                 # Denormalize
-                Y_pred = self._denormalize_outputs(Y_pred_normalized[0], intermediate_name)
-
-                # Reshape to original shape
-                output_shape = self.normalizers[f"output_{intermediate_name}_shape"]
-                Y_pred = Y_pred.reshape(output_shape)
-
-                # Get grid from first training sample's intermediate
-                # (we need to store this during training or reconstruct it)
-                # For now, we'll create a TFTensor with a placeholder grid
-                # In practice, you'd want to store the grid during training
-
-                # Create TFTensor
-                # Note: We need to recreate the grid - this should be stored during training
-                tensor = TFTensor(
-                    grid=self._get_grid_for_intermediate(intermediate_name),
-                    values=Y_pred,
+                y = (
+                    y_normalized[0] * self.normalizers[f"{intermediate_name}_std"]
+                    + self.normalizers[f"{intermediate_name}_mean"]
                 )
 
-                # Create Intermediate
-                intermediate = IntermediateBase(
-                    tensor=tensor,
-                    name=intermediate_name,
-                )
+                # Reshape to original grid shape
+                output_shape = self._get_grid_shape(grid)
+                y_reshaped = y.reshape(output_shape)
 
-                intermediates_dict[intermediate_name] = intermediate
+                # Create tensor
+                tensor = TFTensor(grid=grid, values=tf.constant(y_reshaped, dtype=tf.float32))
+
+                # Create intermediate
+                intermediate = IntermediateBase(name=intermediate_name, tensor=tensor)
+                intermediates[intermediate_name] = intermediate
 
             # Create IntermediateSet
-            iset = IntermediateSet(intermediates=intermediates_dict)
-            intermediate_sets.append(iset)
+            iset = IntermediateSet(intermediates=intermediates)
+            result.append(iset)
 
-        return intermediate_sets
-
-    def _get_grid_for_intermediate(self, intermediate_name: str) -> Any:
-        """Reconstruct or retrieve the grid for an intermediate.
-
-        Parameters
-        ----------
-        intermediate_name
-            Name of the intermediate quantity.
-
-        Returns
-        -------
-            Grid object for the intermediate.
-
-        Notes
-        -----
-        This is a placeholder. In a full implementation, grids should be
-        stored during training and retrieved here.
-        """
-        if self.normalizers is None:
-            raise RuntimeError("No normalization parameters available")
-
-        # Retrieve stored grid information
-        grid_key = f"grid_{intermediate_name}"
-        if grid_key not in self.normalizers:
-            raise RuntimeError(f"No grid information stored for {intermediate_name}")
-
-        return self.normalizers[grid_key]
+        return result
 
     def save(self, filepath: str | Path, **kwargs: Any) -> None:
         """Save the trained emulator to disk.
@@ -558,16 +378,14 @@ class TFC2IEmulator(C2IEmulator):
         Parameters
         ----------
         filepath
-            Path where the emulator should be saved (directory).
+            Path to directory where emulator will be saved.
         **kwargs
-            Additional save parameters.
+            Additional save parameters (unused).
 
         Raises
         ------
         RuntimeError
             If emulator has not been trained.
-        ImportError
-            If TensorFlow is not installed.
 
         Notes
         -----
@@ -575,6 +393,10 @@ class TFC2IEmulator(C2IEmulator):
         - filepath/
           - config.yaml (emulator configuration)
           - normalizers.npz (normalization parameters)
+          - grids/ (grid information)
+            - intermediate_name_1.yaml
+            - intermediate_name_2.yaml
+            - ...
           - models/
             - intermediate_name_1/ (Keras model)
             - intermediate_name_2/ (Keras model)
@@ -588,58 +410,44 @@ class TFC2IEmulator(C2IEmulator):
         filepath = Path(filepath)
         filepath.mkdir(parents=True, exist_ok=True)
 
-        # Save configuration (excluding models and normalizers)
-        config_dict = self.model_dump(exclude={"models", "normalizers"})
+        # Save configuration (excluding models, grids, and normalizers)
+        config_dict = self.model_dump(exclude={"models", "grids", "normalizers"})
 
-        import yaml
         with open(filepath / "config.yaml", "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False)
 
         # Save normalizers
         if self.normalizers is not None:
-            # Separate array and non-array data
-            arrays = {}
-            metadata = {}
+            np.savez(filepath / "normalizers.npz", **self.normalizers)
 
-            for key, value in self.normalizers.items():
-                if isinstance(value, np.ndarray):
-                    arrays[key] = value
-                elif isinstance(value, (list, tuple)) and key == "param_names":
-                    metadata[key] = value
-                elif "shape" in key:
-                    # Store shapes as tuples
-                    metadata[key] = value
-                else:
-                    arrays[key] = np.array(value)
-
-            # Save arrays
-            np.savez(filepath / "normalizers.npz", **arrays)
-
-            # Save metadata
-            with open(filepath / "normalizers_metadata.yaml", "w") as f:
-                yaml.dump(metadata, f, default_flow_style=False)
+        # Save grids
+        grids_dir = filepath / "grids"
+        grids_dir.mkdir(exist_ok=True)
+        
+        for intermediate_name, grid in self.grids.items():
+            if grid is not None:  # Skip None grids (shouldn't happen after training)
+                grid_dict = grid.model_dump()
+                with open(grids_dir / f"{intermediate_name}.yaml", "w") as f:
+                    yaml.dump(grid_dict, f, default_flow_style=False)
 
         # Save models
         models_dir = filepath / "models"
         models_dir.mkdir(exist_ok=True)
 
-        if self.models is not None:
-            for intermediate_name, model in self.models.items():
-                model_path = models_dir / intermediate_name
-                model.save(model_path, save_format="tf")
-
-        print(f"Emulator saved to {filepath}")
+        for intermediate_name, model in self.models.items():
+            model_path = f"{models_dir}/{intermediate_name}.keras"
+            model.save(model_path)
 
     @classmethod
-    def load(cls, filepath: str | Path, **kwargs: Any) -> "TFC2IEmulator":
+    def load(cls, filepath: str | Path, **kwargs: Any) -> TFC2IEmulator:
         """Load a trained emulator from disk.
 
         Parameters
         ----------
         filepath
-            Path to the saved emulator directory.
+            Path to directory containing saved emulator.
         **kwargs
-            Additional load parameters.
+            Additional load parameters (unused).
 
         Returns
         -------
@@ -662,26 +470,48 @@ class TFC2IEmulator(C2IEmulator):
 
         # Load configuration
         import yaml
+
         with open(filepath / "config.yaml") as f:
             config_dict = yaml.safe_load(f)
+            
+        # Load grids
+        grids_dir = filepath / "grids"
+        grids = {}
+        
+        # Get list of grid files to determine intermediate names
+        grid_files = list(grids_dir.glob("*.yaml"))
+        
+        for grid_file in grid_files:
+            intermediate_name = grid_file.stem
+            
+            with open(grid_file) as f:
+                grid_dict = yaml.safe_load(f)
+            
+            # Reconstruct grid based on grid_type
+            grid_type = grid_dict.get("grid_type")
+            
+            if grid_type == "grid_1d":
+                grid = Grid1D(**grid_dict)
+            elif grid_type == "product_grid":
+                # Reconstruct sub-grids
+                sub_grids = {}
+                for name, sub_grid_dict in grid_dict["grids"].items():
+                    sub_grids[name] = Grid1D(**sub_grid_dict)
+                grid = ProductGrid(grids=sub_grids)
+            else:
+                raise ValueError(f"Unknown grid type: {grid_type}")
+            
+            grids[intermediate_name] = grid
+        
+        # Add grids to config
+        config_dict["grids"] = grids
 
-        # Create emulator instance (not yet trained)
+        # Create emulator instance (not yet fully loaded)
         emulator = cls(**config_dict)
 
         # Load normalizers
-        normalizers = {}
-
-        # Load arrays
         npz_data = np.load(filepath / "normalizers.npz")
-        for key in npz_data.files:
-            normalizers[key] = npz_data[key]
-
-        # Load metadata
-        with open(filepath / "normalizers_metadata.yaml") as f:
-            metadata = yaml.safe_load(f)
-            if metadata:
-                normalizers.update(metadata)
-
+        normalizers = {key: npz_data[key] for key in npz_data.files}
         emulator.normalizers = normalizers
 
         # Load models
@@ -689,16 +519,14 @@ class TFC2IEmulator(C2IEmulator):
         models_dir = filepath / "models"
 
         for intermediate_name in emulator.intermediate_names:
-            model_path = models_dir / intermediate_name
-            if model_path.exists():
-                models[intermediate_name] = keras.models.load_model(model_path)
+            model_path = f"{models_dir}/{intermediate_name}.keras"
+            model = keras.models.load_model(model_path)
+            models[intermediate_name] = model
 
         emulator.models = models
-
-        # Set as trained
+        
+        # Mark as trained
         emulator.is_trained = True
-
-        print(f"Emulator loaded from {filepath}")
 
         return emulator
 
@@ -707,3 +535,6 @@ class TFC2IEmulator(C2IEmulator):
 
         arbitrary_types_allowed = True
         extra = "forbid"
+
+
+__all__ = ["TFC2IEmulator"]
