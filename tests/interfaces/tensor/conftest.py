@@ -3,7 +3,7 @@
 import pytest
 
 
-def pytest_configure(config):
+def pytest_configure(config) -> None:
     """Configure pytest with custom markers."""
     config.addinivalue_line(
         "markers",

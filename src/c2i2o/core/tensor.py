@@ -56,6 +56,15 @@ class TensorBase(BaseModel, ABC):
         """
 
     @abstractmethod
+    def to_numpy(self) -> np.ndarray:        
+        """Return underlying tensor values as a numpy array
+
+        Returns
+        -------
+            The tensor data as a numpy array.
+        """
+
+    @abstractmethod
     def set_values(self, values: Any) -> None:
         """Set the underlying tensor values.
 
@@ -159,6 +168,15 @@ class NumpyTensor(TensorBase):
                 raise ValueError(f"Values shape {v.shape} must match grid shape {expected_shape}")
 
         return v
+
+    def to_numpy(self) -> np.ndarray:
+        """Get the underlying tensor values.
+
+        Returns
+        -------
+            NumPy array with shape (n_samples, *grid.shape).
+        """
+        return self.values
 
     def get_values(self) -> np.ndarray:
         """Get the underlying NumPy array.
@@ -442,7 +460,7 @@ class NumpyTensorSet(TensorBase):
 
         # Get expected grid shape
         if isinstance(grid, Grid1D):
-            expected_grid_shape = (grid.n_points,)
+            expected_grid_shape = tuple([grid.n_points])
         elif isinstance(grid, ProductGrid):
             expected_grid_shape = tuple(grid.grids[name].n_points for name in grid.dimension_names)
         else:
@@ -536,13 +554,13 @@ class NumpyTensorSet(TensorBase):
         values_list = []
         for tensor in tensors:
             # Get numpy array from tensor
-            if hasattr(tensor, "to_numpy"):
-                tensor_values = tensor.to_numpy()
-            elif isinstance(tensor.values, np.ndarray):
-                tensor_values = tensor.values
-            else:
-                # For TensorFlow or other backends
-                tensor_values = np.array(tensor.values)
+            tensor_values = tensor.to_numpy()
+            # FIXME remove if unneeded
+            #elif isinstance(tensor.values, np.ndarray):
+            #    tensor_values = tensor.values
+            #else:
+            #    # For TensorFlow or other backends
+            #    tensor_values = np.array(tensor.values)
 
             values_list.append(tensor_values)
 
@@ -588,6 +606,15 @@ class NumpyTensorSet(TensorBase):
 
         return False
 
+    def to_numpy(self) -> np.ndarray:
+        """Get the underlying tensor values.
+
+        Returns
+        -------
+            NumPy array with shape (n_samples, *grid.shape).
+        """
+        return self.values
+
     def get_values(self) -> np.ndarray:
         """Get the underlying tensor values.
 
@@ -612,7 +639,7 @@ class NumpyTensorSet(TensorBase):
         """
         # Determine expected shape
         if isinstance(self.grid, Grid1D):
-            expected_grid_shape = (self.grid.n_points,)
+            expected_grid_shape = tuple([self.grid.n_points])
         elif isinstance(self.grid, ProductGrid):
             expected_grid_shape = tuple(self.grid.grids[name].n_points for name in self.grid.dimension_names)
         else:
@@ -650,7 +677,7 @@ class NumpyTensorSet(TensorBase):
         if isinstance(self.grid, Grid1D):
             return self._evaluate_1d(points)
         elif isinstance(self.grid, ProductGrid):
-            return self._evaluate_product(points)
+            return self._evaluate_product(cast(dict[str, np.ndarray], points))
         else:
             raise NotImplementedError(f"Evaluation not implemented for grid type {type(self.grid).__name__}")
 
@@ -749,7 +776,7 @@ class NumpyTensorSet(TensorBase):
         """
         if index < 0 or index >= self.n_samples:
             raise IndexError(f"Sample index {index} out of range [0, {self.n_samples})")
-        return self.values[index]
+        return cast(np.ndarray, self.values[index])
 
     @property
     def shape(self) -> tuple[int, ...]:

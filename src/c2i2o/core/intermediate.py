@@ -552,7 +552,7 @@ class IntermediateMultiSet(IntermediateSet):
 
         # Get n_samples from first intermediate's tensor
         first_intermediate = next(iter(self.intermediates.values()))
-        return first_intermediate.tensor.n_samples
+        return cast(NumpyTensorSet, first_intermediate.tensor).n_samples
 
     @model_validator(mode="after")
     def validate_all_tensor_sets(self) -> "IntermediateMultiSet":
@@ -674,7 +674,7 @@ class IntermediateMultiSet(IntermediateSet):
 
         return cls(intermediates=combined_intermediates)
 
-    def __getitem__(self, index: int) -> IntermediateSet:
+    def __call__(self, index: int) -> IntermediateSet:
         """Get an IntermediateSet for a specific sample index.
 
         Parameters
@@ -694,13 +694,13 @@ class IntermediateMultiSet(IntermediateSet):
         Examples
         --------
         >>> multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
-        >>> iset_0 = multi_set[0]
+        >>> iset_0 = multi_set(0)
         >>> iset_0.intermediates["P_lin"].tensor.shape
         (11,)
         >>>
         >>> # Access multiple samples
         >>> for i in range(multi_set.n_samples):
-        ...     iset = multi_set[i]
+        ...     iset = multi_set(i)
         ...     # Process individual intermediate set
         """
         if index < 0 or index >= self.n_samples:

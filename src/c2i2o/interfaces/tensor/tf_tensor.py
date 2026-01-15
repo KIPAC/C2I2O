@@ -95,12 +95,12 @@ class TFTensor(TensorBase):
 
         # Determine expected shape based on grid type
         if isinstance(grid, Grid1D):
-            expected_shape = (grid.n_points,)
+            expected_shape = tuple([grid.n_points])
         elif isinstance(grid, ProductGrid):
             expected_shape = tuple(grid.grids[name].n_points for name in grid.dimension_names)
         else:
             # Fallback for other grid types
-            expected_shape = getattr(grid, "shape", None)
+            expected_shape = cast(tuple[int], getattr(grid, "shape", None))
             if expected_shape is None:
                 return v
 
