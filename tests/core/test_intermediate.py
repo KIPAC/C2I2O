@@ -673,7 +673,7 @@ class TestIntermediateMultiSetGetItem:
         multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
 
         # Get first sample
-        iset_0 = multi_set[0]
+        iset_0 = multi_set(0)
 
         assert isinstance(iset_0, IntermediateSet)
         assert "P_lin" in iset_0.intermediates
@@ -697,7 +697,7 @@ class TestIntermediateMultiSetGetItem:
 
         # Verify each sample
         for i in range(3):
-            iset = multi_set[i]
+            iset = multi_set(i)
             np.testing.assert_array_equal(iset.intermediates["P_lin"].tensor.values, expected_values[i])
 
     def test_getitem_multiple_intermediates(self) -> None:
@@ -712,7 +712,7 @@ class TestIntermediateMultiSetGetItem:
 
         multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
 
-        iset_1 = multi_set[1]
+        iset_1 = multi_set(1)
 
         assert set(iset_1.intermediates.keys()) == {"P_lin", "chi"}
         np.testing.assert_array_equal(iset_1.intermediates["P_lin"].tensor.values, np.ones(11))
@@ -728,10 +728,10 @@ class TestIntermediateMultiSetGetItem:
         multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
 
         with pytest.raises(IndexError, match="out of range"):
-            _ = multi_set[3]
+            _ = multi_set(3)
 
         with pytest.raises(IndexError, match="out of range"):
-            _ = multi_set[-1]
+            _ = multi_set(-1)
 
 
 class TestIntermediateMultiSetIteration:
@@ -899,7 +899,7 @@ class TestIntermediateMultiSetProductGrid:
 
         multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
 
-        iset_0 = multi_set[0]
+        iset_0 = multi_set(0)
 
         assert iset_0.intermediates["P_kz"].tensor.shape == (5, 7)
         np.testing.assert_array_equal(iset_0.intermediates["P_kz"].tensor.values, np.zeros((5, 7)))
@@ -922,7 +922,7 @@ class TestIntermediateMultiSetEdgeCases:
         multi_set = IntermediateMultiSet.from_intermediate_set_list(original_list)
 
         # Convert back to list
-        reconstructed_list = [multi_set[i] for i in range(len(multi_set))]
+        reconstructed_list = [multi_set(i) for i in range(len(multi_set))]
 
         # Verify
         assert len(reconstructed_list) == len(original_list)
@@ -944,7 +944,7 @@ class TestIntermediateMultiSetEdgeCases:
         assert len(multi_set) == n_samples
 
         # Test random access
-        iset_500 = multi_set[500]
+        iset_500 = multi_set(500)
         assert isinstance(iset_500, IntermediateSet)
 
     def test_indexing_consistency(self) -> None:
@@ -959,7 +959,7 @@ class TestIntermediateMultiSetEdgeCases:
         multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
 
         # Get via indexing
-        indexed = [multi_set[i] for i in range(len(multi_set))]
+        indexed = [multi_set(i) for i in range(len(multi_set))]
 
         # Get via iteration
         iterated = list(multi_set)
@@ -997,7 +997,7 @@ class TestIntermediateMultiSetDocstringExamples:
         assert multi_set.n_samples == 3
 
         # Access individual intermediate sets
-        iset_0 = multi_set[0]
+        iset_0 = multi_set(0)
         assert iset_0.intermediates["P_lin"].tensor.shape == (11,)
 
     def test_docstring_example_from_list(self) -> None:
@@ -1038,12 +1038,12 @@ class TestIntermediateMultiSetDocstringExamples:
 
         multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
 
-        iset_0 = multi_set[0]
+        iset_0 = multi_set(0)
         assert iset_0.intermediates["P_lin"].tensor.shape == (11,)
 
         # Access multiple samples
         for i in range(multi_set.n_samples):
-            iset = multi_set[i]
+            iset = multi_set(i)
             assert isinstance(iset, IntermediateSet)
 
     def test_docstring_example_len(self) -> None:
@@ -1158,7 +1158,7 @@ class TestIntermediateMultiSetIntegration:
         assert multi_set.n_samples == 5
 
         # Check shapes
-        iset_0 = multi_set[0]
+        iset_0 = multi_set(0)
         assert iset_0.intermediates["chi"].tensor.shape == (30,)
         assert iset_0.intermediates["P_kz"].tensor.shape == (10, 8)
 

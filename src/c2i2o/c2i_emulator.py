@@ -199,7 +199,7 @@ class C2IEmulatorImpl(BaseModel):
         if output_filepath is not None:
             output_filepath = Path(output_filepath)
             output_filepath.parent.mkdir(parents=True, exist_ok=True)
-            writeable_results.save_values(output_filepath)
+            writeable_results.save_values(str(output_filepath))
 
         return results
 
@@ -225,7 +225,7 @@ class C2IEmulatorImpl(BaseModel):
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         writeable_predictions = IntermediateMultiSet.from_intermediate_set_list(predictions)
-        writeable_predictions.save_values(filepath)
+        writeable_predictions.save_values(str(filepath))
 
     def to_yaml(self, filepath: str | Path) -> None:
         """Save the emulator configuration to YAML file.

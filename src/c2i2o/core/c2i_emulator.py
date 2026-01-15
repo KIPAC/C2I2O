@@ -199,6 +199,7 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
         self,
         input_data: dict[str, np.ndarray],
         output_data: list[IntermediateSet],
+        validation_split: float = 0.2,        
         **kwargs: Any,
     ) -> None:
         """Train the emulator on cosmological parameter variations.
@@ -213,6 +214,8 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
             List of IntermediateSet objects, one per training sample.
             Each IntermediateSet contains the intermediate quantities computed
             for the corresponding cosmology.
+        validation_split
+            Fraction of data to use for validation (default: 0.2).
         **kwargs
             Additional training parameters specific to the emulator implementation.
 

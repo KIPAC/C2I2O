@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Iterable, Sized, cast
 
 import numpy as np
 from pydantic import Field
 import yaml
 
 from c2i2o.core.c2i_emulator import C2IEmulator
-from c2i2o.core.grid import Grid1D, ProductGrid
+from c2i2o.core.grid import GridBase, Grid1D, ProductGrid
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 
@@ -142,6 +142,7 @@ class TFC2IEmulator(C2IEmulator):
         self,
         input_data: dict[str, np.ndarray],
         output_data: list[IntermediateSet],
+        validation_split: float = 0.2,
         **kwargs: Any,
     ) -> None:
         """Train the neural network emulator.
@@ -183,7 +184,6 @@ class TFC2IEmulator(C2IEmulator):
         # Extract training parameters
         epochs = kwargs.pop("epochs", 100)
         batch_size = kwargs.pop("batch_size", 32)
-        validation_split = kwargs.pop("validation_split", 0.0)
         verbose = kwargs.pop("verbose", 1)
         early_stopping = kwargs.pop("early_stopping", False)
         patience = kwargs.pop("patience", 10)
@@ -197,7 +197,7 @@ class TFC2IEmulator(C2IEmulator):
             )
 
         # Stack input parameters into matrix (using sorted order from input_shape)
-        X = np.stack([input_data[name] for name in self.input_shape], axis=1)
+        X = np.stack([input_data[name] for name in cast(Iterable, self.input_shape)], axis=1)
 
         # Normalize inputs
         input_mean = np.mean(X, axis=0)
@@ -251,7 +251,7 @@ class TFC2IEmulator(C2IEmulator):
             self.normalizers[f"{intermediate_name}_std"] = output_std
 
             # Build model
-            input_dim = len(self.input_shape)
+            input_dim = len(cast(Sized, self.input_shape))
             output_dim = Y.shape[1]
             model = self._build_model(input_dim, output_dim)
 
@@ -315,10 +315,10 @@ class TFC2IEmulator(C2IEmulator):
         self._check_is_trained()
 
         # Check that input parameters match training
-        if set(input_data.keys()) != set(self.input_shape):
+        if set(input_data.keys()) != set(cast(Iterable, self.input_shape)):
             raise ValueError(
                 f"Input parameters {set(input_data.keys())} do not match "
-                f"training parameters {set(self.input_shape)}"
+                f"training parameters {set(cast(Iterable, self.input_shape))}"
             )
 
         batch_size = kwargs.pop("batch_size", 32)
@@ -336,12 +336,15 @@ class TFC2IEmulator(C2IEmulator):
                 raise ValueError("All parameter arrays must have same length")
 
         # Stack and normalize inputs
-        X = np.stack([input_data[name] for name in self.input_shape], axis=1)
+        X = np.stack([input_data[name] for name in cast(Iterable, self.input_shape)], axis=1)
+        
+        assert self.normalizers
         X_normalized = (X - self.normalizers["input_mean"]) / self.normalizers["input_std"]
 
         # Predict for each intermediate
         result = []
 
+        assert n_samples is not None
         for i in range(n_samples):
             intermediates = {}
 
@@ -360,6 +363,7 @@ class TFC2IEmulator(C2IEmulator):
                 )
 
                 # Reshape to original grid shape
+                assert grid
                 output_shape = self._get_grid_shape(grid)
                 y_reshaped = y.reshape(output_shape)
 
@@ -424,7 +428,7 @@ class TFC2IEmulator(C2IEmulator):
 
         # Save normalizers
         if self.normalizers is not None:
-            np.savez(filepath / "normalizers.npz", **self.normalizers)
+            np.savez(filepath / "normalizers.npz", **self.normalizers)  # type: ignore
 
         # Save grids
         grids_dir = filepath / "grids"
@@ -499,7 +503,7 @@ class TFC2IEmulator(C2IEmulator):
             grid_type = grid_dict.get("grid_type")
 
             if grid_type == "grid_1d":
-                grid = Grid1D(**grid_dict)
+                grid: GridBase = Grid1D(**grid_dict)
             elif grid_type == "product_grid":
                 # Reconstruct sub-grids
                 sub_grids = {}

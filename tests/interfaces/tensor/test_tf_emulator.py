@@ -6,10 +6,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from c2i2o.core.grid import Grid1D, ProductGrid
+from typing import Iterable, Mapping, cast
+
+from c2i2o.core.grid import GridBase, Grid1D, ProductGrid
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 from c2i2o.core.tensor import NumpyTensor
+from c2i2o.core.cosmology import CosmologyBase
 from c2i2o.interfaces.ccl.cosmology import CCLCosmologyVanillaLCDM
 
 # Check if TensorFlow is available
@@ -33,7 +36,7 @@ pytestmark = pytest.mark.skipif(not TF_AVAILABLE, reason="TensorFlow not install
 
 
 @pytest.fixture
-def baseline_cosmology():
+def baseline_cosmology() -> CosmologyBase:
     """Create a baseline cosmology for testing."""
     if not TF_AVAILABLE:
         pytest.skip("TensorFlow not available")
@@ -44,11 +47,14 @@ def baseline_cosmology():
 class TestTFC2IEmulatorInitialization:
     """Test TFC2IEmulator initialization."""
 
-    def test_init_basic(self, baseline_cosmology):
+    def test_init_basic(
+        self,
+        baseline_cosmology: CosmologyBase,
+    ) -> None:
         """Test basic initialization."""
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
 
@@ -58,11 +64,14 @@ class TestTFC2IEmulatorInitialization:
         assert emulator.models == {}
         assert emulator.training_samples is None
 
-    def test_init_with_config(self, baseline_cosmology):
+    def test_init_with_config(
+        self,
+        baseline_cosmology: CosmologyBase,
+    ) -> None:
         """Test initialization with custom configuration."""
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"chi": None},
             hidden_layers=[128, 64, 32],
             learning_rate=0.0001,
@@ -73,11 +82,14 @@ class TestTFC2IEmulatorInitialization:
         assert emulator.learning_rate == 0.0001
         assert emulator.activation == "relu"
 
-    def test_intermediate_names_from_grids(self, baseline_cosmology):
+    def test_intermediate_names_from_grids(
+        self,
+        baseline_cosmology: CosmologyBase,
+    ) -> None:
         """Test that intermediate_names is derived from grids."""
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None, "chi": None},
         )
 
@@ -95,7 +107,7 @@ class TestTFC2IEmulatorTraining:
         return Grid1D(min_value=0.1, max_value=10.0, n_points=20)
 
     @pytest.fixture
-    def simple_training_data(self, simple_grid) -> tuple[dict, list[IntermediateSet]]:
+    def simple_training_data(self, simple_grid: Grid1D) -> tuple[dict, list[IntermediateSet]]:
         """Create simple training data."""
         n_samples = 10
 
@@ -124,13 +136,17 @@ class TestTFC2IEmulatorTraining:
 
         return input_data, output_data
 
-    def test_train_basic(self, baseline_cosmology, simple_training_data):
+    def test_train_basic(
+        self,
+        baseline_cosmology: CosmologyBase,
+        simple_training_data: tuple[dict, list[IntermediateSet]],
+    ) -> None:
         """Test basic training."""
         input_data, output_data = simple_training_data
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[32, 16],
         )
@@ -140,17 +156,21 @@ class TestTFC2IEmulatorTraining:
 
         assert emulator.training_samples == 10
         assert "P_lin" in emulator.models
-        assert set(emulator.input_shape) == set(["Omega_c", "sigma8"])
+        assert set(cast(Iterable, emulator.input_shape)) == set(["Omega_c", "sigma8"])
         assert emulator.is_trained
         assert emulator.grids["P_lin"] is not None  # Grid should be populated
 
-    def test_train_with_early_stopping(self, baseline_cosmology, simple_training_data):
+    def test_train_with_early_stopping(
+        self,
+        baseline_cosmology: CosmologyBase,
+        simple_training_data: tuple[dict, list[IntermediateSet]],
+    ) -> None:
         """Test training with early stopping callback."""
         input_data, output_data = simple_training_data
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[32, 16],
         )
@@ -167,13 +187,17 @@ class TestTFC2IEmulatorTraining:
         assert emulator.training_samples == 10
         assert "P_lin" in emulator.models
 
-    def test_train_validation_split(self, baseline_cosmology, simple_training_data):
+    def test_train_validation_split(
+        self,
+        baseline_cosmology: CosmologyBase,
+        simple_training_data: tuple[dict, list[IntermediateSet]],
+    ) -> None:
         """Test training with validation split."""
         input_data, output_data = simple_training_data
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[32, 16],
         )
@@ -188,7 +212,11 @@ class TestTFC2IEmulatorTraining:
 
         assert emulator.training_samples == 10
 
-    def test_train_wrong_output_count_raises_error(self, baseline_cosmology, simple_grid):
+    def test_train_wrong_output_count_raises_error(
+        self,
+        baseline_cosmology: CosmologyBase,
+        simple_grid: GridBase,
+    ) -> None:
         """Test that wrong number of outputs raises error."""
         input_data = {
             "Omega_c": np.array([0.25, 0.26, 0.27]),
@@ -206,14 +234,18 @@ class TestTFC2IEmulatorTraining:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
 
         with pytest.raises(ValueError, match="Number of output IntermediateSets"):
             emulator.train(input_data, output_data, epochs=5, verbose=0)
 
-    def test_train_missing_intermediate_raises_error(self, baseline_cosmology, simple_grid):
+    def test_train_missing_intermediate_raises_error(
+        self,
+        baseline_cosmology: CosmologyBase,
+        simple_grid: GridBase,
+    ) -> None:
         """Test that missing intermediate in IntermediateSet raises error."""
         input_data = {
             "Omega_c": np.array([0.25, 0.26]),
@@ -231,7 +263,7 @@ class TestTFC2IEmulatorTraining:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
 
@@ -244,7 +276,7 @@ class TestTFC2IEmulatorEvaluation:
     """Test TFC2IEmulator evaluation functionality."""
 
     @pytest.fixture
-    def trained_emulator(self, baseline_cosmology):
+    def trained_emulator(self, baseline_cosmology: CosmologyBase) -> tuple[TFC2IEmulator, Grid1D]:
         """Create a trained emulator for testing."""
         # Setup
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
@@ -268,7 +300,7 @@ class TestTFC2IEmulatorEvaluation:
         # Create and train emulator
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[64, 32],
         )
@@ -276,7 +308,10 @@ class TestTFC2IEmulatorEvaluation:
 
         return emulator, grid
 
-    def test_evaluate_basic(self, trained_emulator):
+    def test_evaluate_basic(
+        self,
+        trained_emulator: tuple[TFC2IEmulator, Grid1D],
+    ) -> None:
         """Test basic evaluation."""
         emulator, grid = trained_emulator
 
@@ -293,7 +328,10 @@ class TestTFC2IEmulatorEvaluation:
         assert all(isinstance(iset, IntermediateSet) for iset in result)
         assert all("P_lin" in iset.intermediates for iset in result)
 
-    def test_evaluate_single_sample(self, trained_emulator):
+    def test_evaluate_single_sample(
+        self,
+        trained_emulator: tuple[TFC2IEmulator, Grid1D],
+    ) -> None:
         """Test evaluation with single sample."""
         emulator, grid = trained_emulator
 
@@ -312,7 +350,10 @@ class TestTFC2IEmulatorEvaluation:
         assert tensor.shape == (20,)  # Should match grid size
         assert isinstance(tensor, TFTensor)
 
-    def test_evaluate_preserves_tensor_type(self, trained_emulator):
+    def test_evaluate_preserves_tensor_type(
+        self,
+        trained_emulator: tuple[TFC2IEmulator, Grid1D],
+    ) -> None:
         """Test that evaluation returns TFTensor instances."""
         emulator, grid = trained_emulator
 
@@ -327,11 +368,14 @@ class TestTFC2IEmulatorEvaluation:
         assert isinstance(tensor, TFTensor)
         assert tf.is_tensor(tensor.values)
 
-    def test_evaluate_not_trained_raises_error(self, baseline_cosmology):
+    def test_evaluate_not_trained_raises_error(
+        self,
+        baseline_cosmology: CosmologyBase,
+    ) -> None:
         """Test that evaluating untrained emulator raises error."""
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
 
@@ -340,7 +384,10 @@ class TestTFC2IEmulatorEvaluation:
         with pytest.raises(RuntimeError, match="not been trained"):
             emulator.emulate(eval_input)
 
-    def test_evaluate_wrong_parameters_raises_error(self, trained_emulator):
+    def test_evaluate_wrong_parameters_raises_error(
+        self,
+        trained_emulator: tuple[TFC2IEmulator, Grid1D],
+    ) -> None:
         """Test that wrong parameters raise error."""
         emulator, grid = trained_emulator
 
@@ -350,7 +397,10 @@ class TestTFC2IEmulatorEvaluation:
         with pytest.raises(ValueError, match="do not match"):
             emulator.emulate(eval_input)
 
-    def test_evaluate_with_batch_size(self, trained_emulator):
+    def test_evaluate_with_batch_size(
+        self,
+        trained_emulator: tuple[TFC2IEmulator, Grid1D],
+    ) -> None:
         """Test evaluation with custom batch size."""
         emulator, grid = trained_emulator
 
@@ -368,7 +418,10 @@ class TestTFC2IEmulatorEvaluation:
 class TestTFC2IEmulatorMultipleIntermediates:
     """Test emulator with multiple intermediates."""
 
-    def test_train_multiple_intermediates(self, baseline_cosmology):
+    def test_train_multiple_intermediates(
+        self,
+        baseline_cosmology: CosmologyBase,
+    ) -> None:
         """Test training with multiple intermediates."""
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=15)
         n_samples = 10
@@ -394,7 +447,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None, "chi": None},
             hidden_layers=[32, 16],
         )
@@ -406,7 +459,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
         assert emulator.grids["P_lin"] is not None
         assert emulator.grids["chi"] is not None
 
-    def test_evaluate_multiple_intermediates(self, baseline_cosmology):
+    def test_evaluate_multiple_intermediates(self, baseline_cosmology: CosmologyBase) -> None:
         """Test evaluation with multiple intermediates."""
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=15)
         n_samples = 10
@@ -430,7 +483,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None, "chi": None},
             hidden_layers=[32, 16],
         )
@@ -450,7 +503,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
 class TestTFC2IEmulatorProductGrid:
     """Test emulator with product grids."""
 
-    def test_train_with_product_grid(self, baseline_cosmology):
+    def test_train_with_product_grid(self, baseline_cosmology: CosmologyBase) -> None:
         """Test training with 2D product grid."""
         grid_k = Grid1D(min_value=0.1, max_value=5.0, n_points=10)
         grid_z = Grid1D(min_value=0.0, max_value=2.0, n_points=8)
@@ -474,7 +527,7 @@ class TestTFC2IEmulatorProductGrid:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_kz": None},
             hidden_layers=[64, 32],
         )
@@ -482,9 +535,9 @@ class TestTFC2IEmulatorProductGrid:
         emulator.train(input_data, output_data, epochs=10, verbose=0)
 
         assert "P_kz" in emulator.models
-        assert emulator.output_shape["P_kz"] == [10, 8]
+        assert cast(Mapping, emulator.output_shape)["P_kz"] == [10, 8]
 
-    def test_evaluate_with_product_grid(self, baseline_cosmology):
+    def test_evaluate_with_product_grid(self, baseline_cosmology: CosmologyBase) -> None:
         """Test evaluation with product grid."""
         grid_k = Grid1D(min_value=0.1, max_value=5.0, n_points=10)
         grid_z = Grid1D(min_value=0.0, max_value=2.0, n_points=8)
@@ -507,7 +560,7 @@ class TestTFC2IEmulatorProductGrid:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_kz": None},
             hidden_layers=[64, 32],
         )
@@ -528,7 +581,11 @@ class TestTFC2IEmulatorProductGrid:
 class TestTFC2IEmulatorSaveLoad:
     """Test emulator save/load functionality."""
 
-    def test_save_load_emulator(self, baseline_cosmology, tmp_path):
+    def test_save_load_emulator(
+        self,
+        baseline_cosmology: CosmologyBase,
+        tmp_path: Path,
+    ) -> None:
         """Test saving and loading trained emulator."""
         # Create and train emulator
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
@@ -547,7 +604,7 @@ class TestTFC2IEmulatorSaveLoad:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[32, 16],
         )
@@ -567,7 +624,11 @@ class TestTFC2IEmulatorSaveLoad:
         assert "P_lin" in loaded_emulator.models
         assert loaded_emulator.grids["P_lin"] is not None
 
-    def test_loaded_emulator_can_evaluate(self, baseline_cosmology, tmp_path):
+    def test_loaded_emulator_can_evaluate(
+        self,
+        baseline_cosmology: CosmologyBase,
+        tmp_path: Path,
+    ) ->  None:
         """Test that loaded emulator can evaluate."""
         # Create and train emulator
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
@@ -586,7 +647,7 @@ class TestTFC2IEmulatorSaveLoad:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
             hidden_layers=[32, 16],
         )
@@ -610,11 +671,15 @@ class TestTFC2IEmulatorSaveLoad:
 
         np.testing.assert_allclose(values_before, values_after, rtol=1e-5)
 
-    def test_save_untrained_raises_error(self, baseline_cosmology, tmp_path):
+    def test_save_untrained_raises_error(
+        self,
+        baseline_cosmology: CosmologyBase,
+        tmp_path: Path,
+    ) -> None:
         """Test that saving untrained emulator raises error."""
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
 
@@ -623,7 +688,7 @@ class TestTFC2IEmulatorSaveLoad:
         with pytest.raises(RuntimeError, match="not been trained"):
             emulator.save(save_path)
 
-    def test_load_nonexistent_raises_error(self, tmp_path):
+    def test_load_nonexistent_raises_error(self, tmp_path: Path) -> None:
         """Test that loading nonexistent emulator raises error."""
         save_path = tmp_path / "nonexistent"
 
@@ -635,7 +700,7 @@ class TestTFC2IEmulatorSaveLoad:
 class TestTFC2IEmulatorNormalization:
     """Test emulator normalization functionality."""
 
-    def test_normalization_stored(self, baseline_cosmology):
+    def test_normalization_stored(self, baseline_cosmology: CosmologyBase) -> None:
         """Test that normalization parameters are stored."""
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
         n_samples = 10
@@ -656,7 +721,7 @@ class TestTFC2IEmulatorNormalization:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
         emulator.train(input_data, output_data, epochs=5, verbose=0)
@@ -668,7 +733,7 @@ class TestTFC2IEmulatorNormalization:
         assert "P_lin_mean" in emulator.normalizers
         assert "P_lin_std" in emulator.normalizers
 
-    def test_normalization_shapes(self, baseline_cosmology):
+    def test_normalization_shapes(self, baseline_cosmology: CosmologyBase) -> None:
         """Test that normalization parameters have correct shapes."""
         grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
         n_samples = 10
@@ -689,13 +754,14 @@ class TestTFC2IEmulatorNormalization:
 
         emulator = TFC2IEmulator(
             name="test_emulator",
-            baseline_cosmology=baseline_cosmology,
+            baseline_cosmology=cast(CCLCosmologyVanillaLCDM, baseline_cosmology),
             grids={"P_lin": None},
         )
         emulator.train(input_data, output_data, epochs=5, verbose=0)
 
         # Check shapes
-        assert emulator.normalizers["input_mean"].shape == (2,)  # 2 parameters
-        assert emulator.normalizers["input_std"].shape == (2,)
-        assert emulator.normalizers["P_lin_mean"].shape == (20,)  # Grid size
-        assert emulator.normalizers["P_lin_std"].shape == (20,)
+        norms = cast(dict[str, np.ndarray], emulator.normalizers)
+        assert norms["input_mean"].shape == (2,)  # 2 parameters
+        assert norms["input_std"].shape == (2,)
+        assert norms["P_lin_mean"].shape == (20,)  # Grid size
+        assert norms["P_lin_std"].shape == (20,)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from c2i2o.c2i_emulator import C2IEmulatorImpl
 from c2i2o.interfaces.tensor.tf_emulator import TFC2IEmulator
-from c2i2o.interfaces.ccl.cosmology import CCLCosmologyVanillaLCDM
+from c2i2o.interfaces.ccl.cosmology import CCLCosmology, CCLCosmologyVanillaLCDM
 from c2i2o.core.grid import Grid1D
 from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor

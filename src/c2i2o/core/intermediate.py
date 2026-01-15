@@ -8,7 +8,7 @@ power spectra, distance-redshift relations, and Hubble evolution.
 
 from abc import ABC
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any, Generator, cast
 
 import numpy as np
 import tables_io
@@ -714,7 +714,7 @@ class IntermediateMultiSet(IntermediateSet):
             grid = intermediate.tensor.grid
 
             # Get sample values
-            sample_values = intermediate.tensor.get_sample(index)
+            sample_values = cast(NumpyTensorSet, intermediate.tensor).get_sample(index)
 
             # Import here to avoid circular dependency
             from c2i2o.core.tensor import NumpyTensor
@@ -747,7 +747,7 @@ class IntermediateMultiSet(IntermediateSet):
         """
         return self.n_samples
 
-    def __iter__(self):
+    def __iter__(self) -> Generator:
         """Iterate over individual IntermediateSet objects.
 
         Yields
@@ -763,7 +763,7 @@ class IntermediateMultiSet(IntermediateSet):
         dict_keys(['P_lin', 'chi'])
         """
         for i in range(self.n_samples):
-            yield self[i]
+            yield self(i)
 
     def __repr__(self) -> str:
         """Return string representation of the multi-set.

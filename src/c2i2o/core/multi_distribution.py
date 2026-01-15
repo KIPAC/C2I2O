@@ -137,7 +137,7 @@ class MultiDistributionBase(BaseModel, ABC):
         -------
             Array of standard deviations (square root of diagonal of covariance).
         """
-        return np.sqrt(np.diag(self.cov))
+        return cast(np.ndarray, np.sqrt(np.diag(self.cov)))
 
     @property
     def correlation(self) -> np.ndarray:

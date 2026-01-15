@@ -9,6 +9,8 @@ from pathlib import Path
 import click
 
 from c2i2o.c2i_calculator import C2ICalculator
+from c2i2o.c2i_emulator import C2IEmulatorImpl
+from c2i2o.c2i_train_emulation import C2ITrainEmulator
 from c2i2o.cli.main import cli
 from c2i2o.cli.option import (
     config_file_arg,
@@ -127,17 +129,17 @@ def compute(
 @patience_opt
 @verbose_opt
 def train_emulator(
-    config_file,
-    input,
-    output,
-    emulator_output,
-    epochs,
-    batch_size,
-    validation_split,
-    early_stopping,
-    patience,
-    verbose,
-):
+    config_file: Path,
+    input: Path,
+    output: Path,
+    emulator_output: Path,
+    epochs: int,
+    batch_size: int,
+    validation_split: float,
+    early_stopping: bool,
+    patience: int,
+    verbose: bool,
+) -> None:
     """Train a C2I emulator from data files.
 
     This command trains a neural network emulator to predict intermediate
@@ -203,7 +205,14 @@ def train_emulator(
 @batch_size_opt
 @overwrite_opt
 @verbose_opt
-def emulate(emulator_path, input, output, batch_size, overwrite, verbose):
+def emulate(
+    emulator_path: Path,
+    input: Path,
+    output: Path,
+    batch_size: int,
+    overwrite: bool,
+    verbose: bool,
+) -> None:
     """Emulate intermediates using a trained emulator.
 
     This command loads a trained emulator and uses it to predict intermediate

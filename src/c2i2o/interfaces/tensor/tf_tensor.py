@@ -118,7 +118,7 @@ class TFTensor(TensorBase):
         -------
             The tensor data as TensorFlow tensor.
         """
-        return self.values
+        return cast(tf.Tensor, self.values)
 
     def set_values(self, values: tf.Tensor | np.ndarray) -> None:
         """Set the underlying tensor values.
@@ -144,14 +144,14 @@ class TFTensor(TensorBase):
 
         # Determine expected shape
         if isinstance(self.grid, Grid1D):
-            expected_shape = (self.grid.n_points,)
+            expected_shape = tuple([self.grid.n_points])
         elif isinstance(self.grid, ProductGrid):
             expected_shape = tuple(self.grid.grids[name].n_points for name in self.grid.dimension_names)
         else:
-            expected_shape = getattr(self.grid, "shape", None)
+            expected_shape = cast(tuple, getattr(self.grid, "shape", None))
 
         # Validate shape
-        values_shape = tuple(values.shape.as_list())
+        values_shape = tuple(cast(tf.TensorShape, values.shape).as_list())
         if expected_shape is not None and values_shape != expected_shape:
             raise ValueError(f"Values shape {values_shape} does not match grid shape {expected_shape}")
 
@@ -185,7 +185,7 @@ class TFTensor(TensorBase):
         if isinstance(self.grid, Grid1D):
             return self._evaluate_1d(points)
         elif isinstance(self.grid, ProductGrid):
-            return self._evaluate_product(points)
+            return self._evaluate_product(cast(dict[str, np.ndarray], points))
         else:
             raise NotImplementedError(f"Evaluation not implemented for grid type {type(self.grid).__name__}")
 
@@ -294,7 +294,7 @@ class TFTensor(TensorBase):
         -------
             TensorFlow dtype of the tensor.
         """
-        return self.values.dtype
+        return cast(tf.DType, self.values.dtype)
 
     def to_numpy(self) -> np.ndarray:
         """Convert tensor to NumPy array.
@@ -306,7 +306,7 @@ class TFTensor(TensorBase):
         -------
             NumPy array with tensor values.
         """
-        return self.values.numpy()
+        return cast(np.ndarray, self.values.numpy())
 
     def __repr__(self) -> str:
         """Return string representation of the tensor.
