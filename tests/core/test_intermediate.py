@@ -6,6 +6,7 @@ from typing import cast
 import numpy as np
 import pytest
 import tables_io
+import yaml
 from pydantic import ValidationError
 
 from c2i2o.core.grid import Grid1D, ProductGrid
@@ -1245,3 +1246,584 @@ class TestIntermediateMultiSetErrorMessages:
 
         assert "has intermediates" in str(excinfo.value)
         assert "expected" in str(excinfo.value)
+
+
+class TestIntermediateSetFileIO:
+    """Test IntermediateSet to_file and from_file methods."""
+
+    def test_to_file_basic(self, tmp_path: Path) -> None:
+        """Test saving IntermediateSet to files."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin = IntermediateBase(
+            name="P_lin",
+            tensor=NumpyTensor(grid=grid, values=np.linspace(0, 10, 11)),
+            units="Mpc^3",
+            description="Linear power spectrum",
+        )
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_iset"
+        iset.to_file(filepath)
+
+        # Check files were created
+        assert (filepath.with_suffix(".hdf5")).exists()
+        assert (filepath.with_suffix(".yaml")).exists()
+
+    def test_to_file_multiple_intermediates(self, tmp_path: Path) -> None:
+        """Test saving multiple intermediates."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin = IntermediateBase(
+            name="P_lin", tensor=NumpyTensor(grid=grid, values=np.linspace(0, 10, 11)), units="Mpc^3"
+        )
+        chi = IntermediateBase(
+            name="chi", tensor=NumpyTensor(grid=grid, values=np.linspace(0, 5, 11)), units="Mpc"
+        )
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
+
+        filepath = tmp_path / "test_multi"
+        iset.to_file(filepath)
+
+        assert (filepath.with_suffix(".hdf5")).exists()
+        assert (filepath.with_suffix(".yaml")).exists()
+
+    def test_to_file_creates_directories(self, tmp_path: Path) -> None:
+        """Test that to_file creates parent directories."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=np.zeros(11)))
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "nested" / "dir" / "test_iset"
+        iset.to_file(filepath)
+
+        assert (filepath.with_suffix(".hdf5")).exists()
+        assert (filepath.with_suffix(".yaml")).exists()
+
+    def test_from_file_basic(self, tmp_path: Path) -> None:
+        """Test loading IntermediateSet from files."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        values = np.linspace(0, 10, 11)
+
+        p_lin = IntermediateBase(
+            name="P_lin",
+            tensor=NumpyTensor(grid=grid, values=values),
+            units="Mpc^3",
+            description="Test description",
+        )
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin}, description="Test set")
+
+        filepath = tmp_path / "test_iset"
+        iset.to_file(filepath)
+
+        # Load back
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        assert "P_lin" in loaded_iset.intermediates
+        assert loaded_iset.intermediates["P_lin"].units == "Mpc^3"
+        assert loaded_iset.intermediates["P_lin"].description == "Test description"
+        assert loaded_iset.description == "Test set"
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, loaded_iset.intermediates["P_lin"].tensor).values, values
+        )
+
+    def test_from_file_multiple_intermediates(self, tmp_path: Path) -> None:
+        """Test loading multiple intermediates."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin_values = np.linspace(0, 10, 11)
+        chi_values = np.linspace(0, 5, 11)
+
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=p_lin_values))
+        chi = IntermediateBase(name="chi", tensor=NumpyTensor(grid=grid, values=chi_values))
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
+
+        filepath = tmp_path / "test_multi"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        assert set(loaded_iset.intermediates.keys()) == {"P_lin", "chi"}
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, loaded_iset.intermediates["P_lin"].tensor).values, p_lin_values
+        )
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, loaded_iset.intermediates["chi"].tensor).values, chi_values
+        )
+
+    def test_from_file_preserves_grid(self, tmp_path: Path) -> None:
+        """Test that grid is preserved correctly."""
+        grid = Grid1D(min_value=0.1, max_value=10.0, n_points=50, spacing="log")
+
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=np.random.randn(50)))
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_grid"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+        loaded_grid = loaded_iset.intermediates["P_lin"].grid
+
+        assert isinstance(loaded_grid, Grid1D)
+        assert loaded_grid.min_value == 0.1
+        assert loaded_grid.max_value == 10.0
+        assert loaded_grid.n_points == 50
+        assert loaded_grid.spacing == "log"
+
+    def test_from_file_product_grid(self, tmp_path: Path) -> None:
+        """Test with ProductGrid."""
+        grid_x = Grid1D(min_value=0.0, max_value=1.0, n_points=5)
+        grid_y = Grid1D(min_value=0.0, max_value=2.0, n_points=7)
+        grid = ProductGrid(grids=[grid_x, grid_y], dimension_names=["x", "y"])
+
+        p_kz = IntermediateBase(name="P_kz", tensor=NumpyTensor(grid=grid, values=np.random.randn(5, 7)))
+
+        iset = IntermediateSet(intermediates={"P_kz": p_kz})
+
+        filepath = tmp_path / "test_product"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+        loaded_grid = loaded_iset.intermediates["P_kz"].grid
+
+        assert isinstance(loaded_grid, ProductGrid)
+        assert set(loaded_grid.dimension_names) == {"x", "y"}
+        assert loaded_grid["x"].n_points == 5
+        assert loaded_grid["y"].n_points == 7
+
+    def test_from_file_missing_hdf5_raises_error(self, tmp_path: Path) -> None:
+        """Test that missing HDF5 file raises error."""
+        filepath = tmp_path / "nonexistent"
+
+        with pytest.raises(FileNotFoundError, match="HDF5 file not found"):
+            IntermediateSet.from_file(filepath)
+
+    def test_from_file_missing_yaml_raises_error(self, tmp_path: Path) -> None:
+        """Test that missing YAML file raises error."""
+        # Create HDF5 file but not YAML
+        filepath = tmp_path / "incomplete"
+        tables_io.write({"dummy": np.array([1])}, filepath.with_suffix(".hdf5"))
+
+        with pytest.raises(FileNotFoundError, match="YAML file not found"):
+            IntermediateSet.from_file(filepath)
+
+    def test_round_trip_preserves_values(self, tmp_path: Path) -> None:
+        """Test that round-trip preserves exact values."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        values = np.random.randn(11)
+
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=values))
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "round_trip"
+        iset.to_file(filepath)
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, loaded_iset.intermediates["P_lin"].tensor).values, values
+        )
+
+
+class TestIntermediateMultiSetFileIO:
+    """Test IntermediateMultiSet to_file and from_file methods."""
+
+    def test_to_file_basic(self, tmp_path: Path) -> None:
+        """Test saving IntermediateMultiSet to files."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        tensor_set = NumpyTensorSet(
+            grid=grid,
+            n_samples=3,
+            values=np.array(
+                [
+                    np.linspace(0, 10, 11),
+                    np.linspace(0, 20, 11),
+                    np.linspace(0, 30, 11),
+                ]
+            ),
+        )
+
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_multi_set"
+        multi_set.to_file(filepath)
+
+        assert (filepath.with_suffix(".hdf5")).exists()
+        assert (filepath.with_suffix(".yaml")).exists()
+
+    def test_to_file_multiple_intermediates(self, tmp_path: Path) -> None:
+        """Test saving multiple intermediates."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        n_samples = 5
+
+        p_lin_tensor = NumpyTensorSet(grid=grid, n_samples=n_samples, values=np.random.randn(n_samples, 11))
+        chi_tensor = NumpyTensorSet(grid=grid, n_samples=n_samples, values=np.random.randn(n_samples, 11))
+
+        p_lin = IntermediateBase(name="P_lin", tensor=p_lin_tensor)
+        chi = IntermediateBase(name="chi", tensor=chi_tensor)
+
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin, "chi": chi})
+
+        filepath = tmp_path / "test_multi_intermediates"
+        multi_set.to_file(filepath)
+
+        assert (filepath.with_suffix(".hdf5")).exists()
+        assert (filepath.with_suffix(".yaml")).exists()
+
+    def test_from_file_basic(self, tmp_path: Path) -> None:
+        """Test loading IntermediateMultiSet from files."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        values = np.array(
+            [
+                np.linspace(0, 10, 11),
+                np.linspace(0, 20, 11),
+                np.linspace(0, 30, 11),
+            ]
+        )
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=3, values=values)
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set, units="Mpc^3", description="Test multi-set")
+
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin}, description="Training data")
+
+        filepath = tmp_path / "test_load"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        assert loaded_multi.n_samples == 3
+        assert "P_lin" in loaded_multi.intermediates
+        assert loaded_multi.intermediates["P_lin"].units == "Mpc^3"
+        assert loaded_multi.description == "Training data"
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, loaded_multi.intermediates["P_lin"].tensor).values, values
+        )
+
+    def test_from_file_multiple_intermediates(self, tmp_path: Path) -> None:
+        """Test loading multiple intermediates."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        n_samples = 5
+
+        p_lin_values = np.random.randn(n_samples, 11)
+        chi_values = np.random.randn(n_samples, 11)
+
+        p_lin_tensor = NumpyTensorSet(grid=grid, n_samples=n_samples, values=p_lin_values)
+        chi_tensor = NumpyTensorSet(grid=grid, n_samples=n_samples, values=chi_values)
+
+        p_lin = IntermediateBase(name="P_lin", tensor=p_lin_tensor)
+        chi = IntermediateBase(name="chi", tensor=chi_tensor)
+
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin, "chi": chi})
+
+        filepath = tmp_path / "test_multi_load"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        assert loaded_multi.n_samples == n_samples
+        assert set(loaded_multi.intermediates.keys()) == {"P_lin", "chi"}
+        np.testing.assert_array_equal(
+            cast(NumpyTensorSet, loaded_multi.intermediates["P_lin"].tensor).values, p_lin_values
+        )
+        np.testing.assert_array_equal(
+            cast(NumpyTensorSet, loaded_multi.intermediates["chi"].tensor).values, chi_values
+        )
+
+    def test_from_file_preserves_n_samples(self, tmp_path: Path) -> None:
+        """Test that n_samples is preserved."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        n_samples = 100
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=n_samples, values=np.random.randn(n_samples, 11))
+
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_n_samples"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        assert loaded_multi.n_samples == n_samples
+        assert len(loaded_multi) == n_samples
+
+    def test_from_file_preserves_grid(self, tmp_path: Path) -> None:
+        """Test that grid is preserved correctly."""
+        grid = Grid1D(min_value=0.1, max_value=10.0, n_points=50, spacing="log")
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=10, values=np.random.randn(10, 50))
+
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_grid"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+        loaded_grid = loaded_multi.intermediates["P_lin"].grid
+
+        assert isinstance(loaded_grid, Grid1D)
+        assert loaded_grid.min_value == 0.1
+        assert loaded_grid.max_value == 10.0
+        assert loaded_grid.n_points == 50
+        assert loaded_grid.spacing == "log"
+
+    def test_from_file_product_grid(self, tmp_path: Path) -> None:
+        """Test with ProductGrid."""
+        grid_x = Grid1D(min_value=0.0, max_value=1.0, n_points=5)
+        grid_y = Grid1D(min_value=0.0, max_value=2.0, n_points=7)
+        grid = ProductGrid(grids=[grid_x, grid_y], dimension_names=["x", "y"])
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=3, values=np.random.randn(3, 5, 7))
+
+        p_kz = IntermediateBase(name="P_kz", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_kz": p_kz})
+
+        filepath = tmp_path / "test_product"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+        loaded_grid = loaded_multi.intermediates["P_kz"].grid
+
+        assert isinstance(loaded_grid, ProductGrid)
+        assert set(loaded_grid.dimension_names) == {"x", "y"}
+        assert loaded_grid["x"].n_points == 5
+        assert loaded_grid["y"].n_points == 7
+
+    def test_from_file_missing_hdf5_raises_error(self, tmp_path: Path) -> None:
+        """Test that missing HDF5 file raises error."""
+        filepath = tmp_path / "nonexistent"
+
+        with pytest.raises(FileNotFoundError, match="HDF5 file not found"):
+            IntermediateMultiSet.from_file(filepath)
+
+    def test_from_file_missing_yaml_raises_error(self, tmp_path: Path) -> None:
+        """Test that missing YAML file raises error."""
+        # Create HDF5 file but not YAML
+        filepath = tmp_path / "incomplete"
+        tables_io.write({"dummy": np.array([[1]])}, filepath.with_suffix(".hdf5"))
+
+        with pytest.raises(FileNotFoundError, match="YAML file not found"):
+            IntermediateMultiSet.from_file(filepath)
+
+    def test_round_trip_preserves_values(self, tmp_path: Path) -> None:
+        """Test that round-trip preserves exact values."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+        values = np.random.randn(10, 11)
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=10, values=values)
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "round_trip"
+        multi_set.to_file(filepath)
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        np.testing.assert_array_equal(
+            cast(NumpyTensorSet, loaded_multi.intermediates["P_lin"].tensor).values, values
+        )
+
+    def test_round_trip_getitem_works(self, tmp_path: Path) -> None:
+        """Test that loaded multi-set supports getitem."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        # Create from intermediate sets
+        iset_list = []
+        for i in range(5):
+            p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=i * np.ones(11)))
+            iset_list.append(IntermediateSet(intermediates={"P_lin": p_lin}))
+
+        multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
+
+        filepath = tmp_path / "test_getitem"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        # Test getitem
+        iset_0 = loaded_multi(0)
+        assert isinstance(iset_0, IntermediateSet)
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, iset_0.intermediates["P_lin"].tensor).values, np.zeros(11)
+        )
+
+        iset_2 = loaded_multi(2)
+        np.testing.assert_array_equal(
+            cast(NumpyTensor, iset_2.intermediates["P_lin"].tensor).values, 2 * np.ones(11)
+        )
+
+    def test_round_trip_iteration_works(self, tmp_path: Path) -> None:
+        """Test that loaded multi-set supports iteration."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        iset_list = []
+        for i in range(3):
+            p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=i * np.ones(11)))
+            iset_list.append(IntermediateSet(intermediates={"P_lin": p_lin}))
+
+        multi_set = IntermediateMultiSet.from_intermediate_set_list(iset_list)
+
+        filepath = tmp_path / "test_iter"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        # Test iteration
+        for i, iset in enumerate(loaded_multi):
+            assert isinstance(iset, IntermediateSet)
+            np.testing.assert_array_equal(
+                cast(NumpyTensor, iset.intermediates["P_lin"].tensor).values, i * np.ones(11)
+            )
+
+
+class TestFileIOEdgeCases:
+    """Test edge cases for file I/O."""
+
+    def test_iset_with_none_units(self, tmp_path: Path) -> None:
+        """Test IntermediateSet with None units and description."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin = IntermediateBase(
+            name="P_lin", tensor=NumpyTensor(grid=grid, values=np.zeros(11)), units=None, description=None
+        )
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_none"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        assert loaded_iset.intermediates["P_lin"].units is None
+        assert loaded_iset.intermediates["P_lin"].description is None
+
+    def test_iset_with_none_description(self, tmp_path: Path) -> None:
+        """Test IntermediateSet with None description."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=np.zeros(11)))
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin}, description=None)
+
+        filepath = tmp_path / "test_none_desc"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        assert loaded_iset.description is None
+
+    def test_multi_set_large_n_samples(self, tmp_path: Path) -> None:
+        """Test with large number of samples."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=50)
+        n_samples = 1000
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=n_samples, values=np.random.randn(n_samples, 50))
+
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_large"
+        multi_set.to_file(filepath)
+
+        loaded_multi = IntermediateMultiSet.from_file(filepath)
+
+        assert loaded_multi.n_samples == n_samples
+
+    def test_filepath_with_extension(self, tmp_path: Path) -> None:
+        """Test that filepath with extension is handled correctly."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        p_lin = IntermediateBase(name="P_lin", tensor=NumpyTensor(grid=grid, values=np.zeros(11)))
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin})
+
+        # Provide filepath with .hdf5 extension
+        filepath = tmp_path / "test_iset.hdf5"
+        iset.to_file(filepath)
+
+        # Should still create both .hdf5 and .yaml
+        assert (tmp_path / "test_iset.hdf5").exists()
+        assert (tmp_path / "test_iset.yaml").exists()
+
+    def test_special_characters_in_names(self, tmp_path: Path) -> None:
+        """Test intermediates with special characters in names."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        # Names with underscores and numbers
+        intermediate_1 = IntermediateBase(name="P_lin_z0", tensor=NumpyTensor(grid=grid, values=np.zeros(11)))
+        intermediate_2 = IntermediateBase(name="chi_CMB", tensor=NumpyTensor(grid=grid, values=np.ones(11)))
+
+        iset = IntermediateSet(intermediates={"P_lin_z0": intermediate_1, "chi_CMB": intermediate_2})
+
+        filepath = tmp_path / "test_special"
+        iset.to_file(filepath)
+
+        loaded_iset = IntermediateSet.from_file(filepath)
+
+        assert "P_lin_z0" in loaded_iset.intermediates
+        assert "chi_CMB" in loaded_iset.intermediates
+
+
+class TestFileIOYAMLContent:
+    """Test that YAML files contain expected content."""
+
+    def test_yaml_contains_metadata(self, tmp_path: Path) -> None:
+        """Test that YAML file contains all metadata."""
+        grid = Grid1D(min_value=0.1, max_value=10.0, n_points=50, spacing="log")
+
+        p_lin = IntermediateBase(
+            name="P_lin",
+            tensor=NumpyTensor(grid=grid, values=np.random.randn(50)),
+            units="Mpc^3",
+            description="Linear power spectrum",
+        )
+
+        iset = IntermediateSet(intermediates={"P_lin": p_lin}, description="Test dataset")
+
+        filepath = tmp_path / "test_yaml"
+        iset.to_file(filepath)
+
+        # Read YAML and check content
+        with open(filepath.with_suffix(".yaml")) as f:
+            metadata = yaml.safe_load(f)
+
+        assert "intermediate_names" in metadata
+        assert "P_lin" in metadata["intermediate_names"]
+        assert "description" in metadata
+        assert metadata["description"] == "Test dataset"
+        assert "intermediates" in metadata
+        assert "P_lin" in metadata["intermediates"]
+
+        p_lin_meta = metadata["intermediates"]["P_lin"]
+        assert p_lin_meta["units"] == "Mpc^3"
+        assert p_lin_meta["description"] == "Linear power spectrum"
+        assert p_lin_meta["tensor_type"] == "numpy"
+        assert "grid" in p_lin_meta
+        assert p_lin_meta["grid"]["grid_type"] == "grid_1d"
+
+    def test_multi_set_yaml_contains_n_samples(self, tmp_path: Path) -> None:
+        """Test that multi-set YAML contains n_samples."""
+        grid = Grid1D(min_value=0.0, max_value=1.0, n_points=11)
+
+        tensor_set = NumpyTensorSet(grid=grid, n_samples=25, values=np.random.randn(25, 11))
+
+        p_lin = IntermediateBase(name="P_lin", tensor=tensor_set)
+        multi_set = IntermediateMultiSet(intermediates={"P_lin": p_lin})
+
+        filepath = tmp_path / "test_n_samples_yaml"
+        multi_set.to_file(filepath)
+
+        with open(filepath.with_suffix(".yaml")) as f:
+            metadata = yaml.safe_load(f)
+
+        assert "n_samples" in metadata
+        assert metadata["n_samples"] == 25
+        assert metadata["intermediates"]["P_lin"]["tensor_type"] == "numpy_set"

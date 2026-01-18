@@ -928,7 +928,7 @@ class TestCCLIntermediateCalculator:
                                 "max_value": 10.0,
                                 "n_points": 20,
                                 "spacing": "log",
-                            },                        
+                            },
                         ],
                         "dimension_names": ["a", "k"],
                     },

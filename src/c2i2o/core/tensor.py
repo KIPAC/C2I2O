@@ -31,17 +31,6 @@ class TensorBase(BaseModel, ABC):
     tensor_type
         String identifier for the tensor backend type.
 
-    Examples
-    --------
-    >>> class CustomTensor(TensorBase):
-    ...     tensor_type: Literal["custom"] = "custom"
-    ...     def get_values(self) -> Any:
-    ...         return self._data
-    ...     def set_values(self, values: Any) -> None:
-    ...         self._data = values
-    ...     def evaluate(self, points: dict[str, np.ndarray]) -> np.ndarray:
-    ...         # Implementation here
-    ...         pass
     """
 
     grid: GridBase = Field(..., description="Grid defining the tensor domain")
@@ -460,13 +449,7 @@ class NumpyTensorSet(TensorBase):
             return v
 
         # Get expected grid shape
-        if isinstance(grid, Grid1D):
-            expected_grid_shape = cast(tuple, (grid.n_points,))
-        elif isinstance(grid, ProductGrid):
-            expected_grid_shape = grid.shape
-        else:
-            expected_grid_shape = getattr(grid, "shape", ())
-
+        expected_grid_shape = grid.shape
         expected_shape = (n_samples,) + expected_grid_shape
 
         if v.shape != expected_shape:
@@ -600,6 +583,23 @@ class NumpyTensorSet(TensorBase):
 
         return False
 
+    def __call__(self, idx: int) -> NumpyTensor:
+        """Get one of the underlying Tensors by index
+
+        Parameters
+        ----------
+        idx
+            Index of request Tensor
+
+        Returns
+        -------
+            NumpyTensor array with shape (*grid.shape).
+        """
+        try:
+            return NumpyTensor(grid=self.grid, values=self.values[idx])
+        except KeyError as msg:
+            raise KeyError(f"Index {idx} not in [0, {self.n_samples})") from msg
+
     def to_numpy(self) -> np.ndarray:
         """Get the underlying tensor values.
 
@@ -632,12 +632,7 @@ class NumpyTensorSet(TensorBase):
             If values shape doesn't match expected dimensions.
         """
         # Determine expected shape
-        if isinstance(self.grid, Grid1D):
-            expected_grid_shape = cast(tuple, (self.grid.n_points,))
-        elif isinstance(self.grid, ProductGrid):
-            expected_grid_shape = self.grid.shape
-        else:
-            expected_grid_shape = getattr(self.grid, "shape", ())
+        expected_grid_shape = self.grid.shape
 
         expected_shape = (self.n_samples,) + expected_grid_shape
 
@@ -712,6 +707,8 @@ class NumpyTensorSet(TensorBase):
         ----------
         points
             Dictionary mapping dimension names to point arrays.
+
+
 
         Returns
         -------

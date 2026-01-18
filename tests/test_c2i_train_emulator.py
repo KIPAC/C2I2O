@@ -8,7 +8,7 @@ import tables_io
 import yaml
 
 from c2i2o.c2i_train_emulator import C2ITrainEmulator
-from c2i2o.core.intermediate import IntermediateSet
+from c2i2o.core.intermediate import IntermediateMultiSet
 from c2i2o.interfaces.tensor.tf_emulator import TFC2IEmulator
 
 
@@ -40,7 +40,7 @@ class TestC2ITrainEmulatorTraining:
     """Test C2ITrainEmulator training functionality."""
 
     def test_train_basic(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test basic training."""
         input_data, output_data = training_data
@@ -62,7 +62,7 @@ class TestC2ITrainEmulatorTraining:
         assert metadata_file.exists()
 
     def test_train_creates_output_dir(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test that training creates output directory."""
         input_data, output_data = training_data
@@ -79,7 +79,7 @@ class TestC2ITrainEmulatorTraining:
         assert (output_dir / "training_metadata.yaml").exists()
 
     def test_train_with_validation_split(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test training with validation split."""
         input_data, output_data = training_data
@@ -94,7 +94,7 @@ class TestC2ITrainEmulatorTraining:
         assert trainer.emulator.is_trained
 
     def test_train_with_early_stopping(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test training with early stopping."""
         input_data, output_data = training_data
@@ -116,7 +116,7 @@ class TestC2ITrainEmulatorTraining:
         assert trainer.emulator.is_trained
 
     def test_train_metadata_content(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test training metadata content."""
         input_data, output_data = training_data
@@ -189,7 +189,7 @@ class TestC2ITrainEmulatorSaveEmulator:
             trainer.save_emulator(tmp_path / "emulator")
 
     def test_save_emulator_custom_path(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test saving emulator to custom path."""
         input_data, output_data = training_data
@@ -209,7 +209,7 @@ class TestC2ITrainEmulatorSaveEmulator:
         assert (save_path / "models").exists()
 
     def test_save_emulator_default_path(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test saving emulator to default path."""
         input_data, output_data = training_data
@@ -304,7 +304,7 @@ class TestC2ITrainEmulatorRepr:
         assert "chi" in repr_str
 
     def test_repr_trained(
-        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, list[IntermediateSet]], tmp_path: Path
+        self, test_emulator: TFC2IEmulator, training_data: tuple[dict, IntermediateMultiSet], tmp_path: Path
     ) -> None:
         """Test repr for trained emulator."""
         input_data, output_data = training_data

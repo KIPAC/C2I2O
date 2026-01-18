@@ -111,10 +111,10 @@ class TestC2ICalculator:
 
         # Check results
         assert len(intermediate_sets) == 2
-        assert isinstance(intermediate_sets[0], IntermediateSet)
-        assert isinstance(intermediate_sets[1], IntermediateSet)
-        assert "chi" in intermediate_sets[0]
-        assert "chi" in intermediate_sets[1]
+        assert isinstance(intermediate_sets(0), IntermediateSet)
+        assert isinstance(intermediate_sets(1), IntermediateSet)
+        assert "chi" in intermediate_sets(0).names
+        assert "chi" in intermediate_sets(1).names
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_returns_intermediate_sets(
@@ -132,7 +132,7 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         assert len(intermediate_sets) == 1
-        intermediate = intermediate_sets[0]["chi"]
+        intermediate = intermediate_sets(0)["chi"]
         assert intermediate.name == "chi"
         assert cast(NumpyTensor, intermediate.tensor).values.shape == (10,)
 
@@ -163,8 +163,8 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         assert len(intermediate_sets) == 1
-        assert "chi" in intermediate_sets[0]
-        assert "H" in intermediate_sets[0]
+        assert "chi" in intermediate_sets(0).names
+        assert "H" in intermediate_sets(0).names
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_2d_intermediates(
@@ -188,9 +188,9 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         assert len(intermediate_sets) == 1
-        assert "P_lin" in intermediate_sets[0]
+        assert "P_lin" in intermediate_sets(0).names
         # Shape should be (n_a, n_k) = (5, 20)
-        assert cast(NumpyTensor, intermediate_sets[0]["P_lin"].tensor).values.shape == (5, 20)
+        assert cast(NumpyTensor, intermediate_sets(0)["P_lin"].tensor).values.shape == (5, 20)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_empty_params(
@@ -201,9 +201,8 @@ class TestC2ICalculator:
         """Test compute with empty parameters."""
         assert mock_pyccl
         params: dict[str, Any] = {}
-        intermediate_sets = calculator.compute(params)
-
-        assert len(intermediate_sets) == 0
+        with pytest.raises(ValueError):
+            calculator.compute(params)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_to_dict_basic(
@@ -472,9 +471,9 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         # Check order is preserved
-        assert cast(NumpyTensor, intermediate_sets[0]["chi"].tensor).values[0] == 1000
-        assert cast(NumpyTensor, intermediate_sets[1]["chi"].tensor).values[0] == 1100
-        assert cast(NumpyTensor, intermediate_sets[2]["chi"].tensor).values[0] == 1200
+        assert cast(NumpyTensor, intermediate_sets(0)["chi"].tensor).values[0] == 1000
+        assert cast(NumpyTensor, intermediate_sets(1)["chi"].tensor).values[0] == 1100
+        assert cast(NumpyTensor, intermediate_sets(2)["chi"].tensor).values[0] == 1200
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_compute_from_file_preserves_sample_order(
@@ -546,7 +545,7 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         # Access by name using dict-like interface
-        chi_intermediate = intermediate_sets[0]["chi"]
+        chi_intermediate = intermediate_sets(0)["chi"]
         assert chi_intermediate.name == "chi"
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
@@ -563,7 +562,7 @@ class TestC2ICalculator:
         params = {"Omega_c": np.array([0.25])}
         intermediate_sets = calculator.compute(params)
 
-        chi_intermediate = intermediate_sets[0]["chi"]
+        chi_intermediate = intermediate_sets(0)["chi"]
         assert isinstance(chi_intermediate.tensor, NumpyTensor)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
@@ -581,7 +580,7 @@ class TestC2ICalculator:
         params = {"Omega_c": np.array([0.25])}
         intermediate_sets = calculator.compute(params)
 
-        chi_values = cast(NumpyTensor, intermediate_sets[0]["chi"].tensor).values
+        chi_values = cast(NumpyTensor, intermediate_sets(0)["chi"].tensor).values
         assert chi_values.shape == (10,)
         np.testing.assert_array_almost_equal(chi_values, expected_values)
 
@@ -758,10 +757,8 @@ class TestC2ICalculator:
         calculator = C2ICalculator(intermediate_calculator=ccl_calc)
 
         params = {"Omega_c": np.array([0.25])}
-        intermediate_sets = calculator.compute(params)
-
-        # Should return list with empty IntermediateSet
-        assert len(intermediate_sets) == 0
+        with pytest.raises(ValueError):
+            calculator.compute(params)
 
     @patch("c2i2o.interfaces.ccl.intermediate_calculator.pyccl")
     def test_intermediate_grid_preserved(
@@ -778,7 +775,7 @@ class TestC2ICalculator:
         intermediate_sets = calculator.compute(params)
 
         # Get the grid from the intermediate
-        chi_grid = cast(Grid1D, cast(NumpyTensor, intermediate_sets[0]["chi"].tensor).grid)
+        chi_grid = cast(Grid1D, cast(NumpyTensor, intermediate_sets(0)["chi"].tensor).grid)
 
         # Should match the original computation config grid
         original_grid = cast(Grid1D, calculator.intermediate_calculator.computations["chi"].eval_grid)

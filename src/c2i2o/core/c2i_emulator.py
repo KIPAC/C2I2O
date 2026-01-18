@@ -13,7 +13,7 @@ from pydantic import Field
 
 from c2i2o.core.emulator import EmulatorBase
 from c2i2o.core.grid import Grid1D, GridBase, ProductGrid
-from c2i2o.core.intermediate import IntermediateSet
+from c2i2o.core.intermediate import IntermediateMultiSet, IntermediateSet
 from c2i2o.interfaces.ccl.cosmology import CCLCosmology, CCLCosmologyCalculator, CCLCosmologyVanillaLCDM
 
 CCLCosmologyUnion = Annotated[
@@ -22,7 +22,7 @@ CCLCosmologyUnion = Annotated[
 ]
 
 
-class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
+class C2IEmulator(EmulatorBase[dict[str, np.ndarray], IntermediateMultiSet]):
     """Abstract base class for cosmology-to-intermediate emulators.
 
     This class defines the interface for emulators that learn the mapping from
@@ -146,7 +146,7 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
             if values.ndim != 1:
                 raise ValueError(f"Parameter '{name}' must be 1D, got shape {values.shape}")
 
-    def _validate_output_data(self, output_data: list[IntermediateSet]) -> None:
+    def _validate_output_data(self, output_data: IntermediateMultiSet) -> None:
         """Validate output data format.
 
         Parameters
@@ -159,8 +159,8 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
         ValueError
             If output data format is invalid.
         """
-        if not isinstance(output_data, list):
-            raise ValueError(f"Output data must be a list, got {type(output_data)}")
+        if not isinstance(output_data, IntermediateMultiSet):
+            raise ValueError(f"Output data must be a IntermediateMultiSet, got {type(output_data)}")
 
         if len(output_data) == 0:
             raise ValueError("Output data list is empty")
@@ -180,7 +180,7 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
         # Store output shape on first validation (during training)
         if self.output_shape is None:
             self.output_shape = {
-                name: list(self._get_grid_shape(output_data[0].intermediates[name].tensor.grid))
+                name: list(self._get_grid_shape(output_data(0).intermediates[name].tensor.grid))
                 for name in self.intermediate_names
             }
 
@@ -188,7 +188,7 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
     def train(
         self,
         input_data: dict[str, np.ndarray],
-        output_data: list[IntermediateSet],
+        output_data: IntermediateMultiSet,
         validation_split: float = 0.2,
         **kwargs: Any,
     ) -> None:
@@ -237,7 +237,7 @@ class C2IEmulator(EmulatorBase[dict[str, np.ndarray], list[IntermediateSet]]):
         self,
         input_data: dict[str, np.ndarray],
         **kwargs: Any,
-    ) -> list[IntermediateSet]:
+    ) -> IntermediateMultiSet:
         """Emulate intermediate quantities for new cosmological parameters.
 
         Parameters

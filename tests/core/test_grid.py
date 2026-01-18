@@ -531,7 +531,7 @@ class TestGridDiscriminator:
                     "spacing": "linear",
                 },
             ],
-            "dimension_names": ["x", "y"],            
+            "dimension_names": ["x", "y"],
         }
 
         product_grid = ProductGrid(**data)  # type: ignore

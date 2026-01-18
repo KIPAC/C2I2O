@@ -13,7 +13,7 @@ import yaml
 from pydantic import BaseModel, Field
 from tables_io import read, write
 
-from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.intermediate import IntermediateBase, IntermediateMultiSet, IntermediateSet
 from c2i2o.core.tensor import NumpyTensor
 from c2i2o.interfaces.ccl.intermediate_calculator import CCLIntermediateCalculator
 
@@ -70,7 +70,7 @@ class C2ICalculator(BaseModel):
         description="CCL calculator for computing intermediate data products",
     )
 
-    def compute(self, params: dict[str, np.ndarray]) -> list[IntermediateSet]:
+    def compute(self, params: dict[str, np.ndarray]) -> IntermediateMultiSet:
         """Compute intermediate data products for parameter sets.
 
         Parameters
@@ -82,7 +82,8 @@ class C2ICalculator(BaseModel):
 
         Returns
         -------
-            List of IntermediateSet objects, one per parameter sample.
+            IntermediateMultiSet objects, wrapping an IntermediateSet
+            per sample.
             Each IntermediateSet contains all requested intermediates
             evaluated on their respective grids.
 
@@ -112,7 +113,7 @@ class C2ICalculator(BaseModel):
 
         # Determine number of samples
         if not raw_results:
-            return []
+            return IntermediateMultiSet.from_intermediate_set_list([])
 
         first_key = next(iter(raw_results))
         n_samples = raw_results[first_key].shape[0]
@@ -146,7 +147,7 @@ class C2ICalculator(BaseModel):
             intermediate_set = IntermediateSet(intermediates=intermediates)
             intermediate_sets.append(intermediate_set)
 
-        return intermediate_sets
+        return IntermediateMultiSet.from_intermediate_set_list(intermediate_sets)
 
     def compute_from_file(
         self,

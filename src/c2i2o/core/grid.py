@@ -39,6 +39,16 @@ class GridBase(BaseModel, ABC):
             Array of grid points. Shape depends on implementation.
         """
 
+    @property
+    @abstractmethod
+    def shape(self) -> tuple[int, ...]:
+        """Returh the shape of the grid.
+
+        Returns
+        -------
+            Tuple with the shape of the grid.
+        """
+
     class Config:
         """Pydantic configuration."""
 
@@ -153,6 +163,16 @@ class Grid1D(GridBase):
         return (self.max_value - self.min_value) / (self.n_points - 1)
 
     @property
+    def shape(self) -> tuple[int, ...]:
+        """Returh the shape of the grid.
+
+        Returns
+        -------
+            Tuple with the shape of the grid.
+        """
+        return (self.n_points,)
+
+    @property
     def log_step_size(self) -> float:
         """Compute the logarithmic step size for log grids.
 
@@ -249,7 +269,7 @@ class ProductGrid(GridBase):
         return self
 
     @property
-    def shape(self) -> tuple:
+    def shape(self) -> tuple[int, ...]:
         """Get the shape of the grid.
 
         Returns

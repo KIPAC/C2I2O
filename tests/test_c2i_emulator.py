@@ -8,8 +8,8 @@ import tables_io
 import yaml
 
 from c2i2o.c2i_emulator import C2IEmulatorImpl
-from c2i2o.core.intermediate import IntermediateSet
-from c2i2o.interfaces.tensor.tf_tensor import TFTensor
+from c2i2o.core.intermediate import IntermediateMultiSet, IntermediateSet
+from c2i2o.core.tensor import TensorBase
 
 
 class TestC2IEmulatorImplInitialization:
@@ -51,7 +51,7 @@ class TestC2IEmulatorImplEmulate:
 
         results = emulator_impl.emulate(test_params)
 
-        assert isinstance(results, list)
+        assert isinstance(results, IntermediateMultiSet)
         assert len(results) == 2
         assert all(isinstance(iset, IntermediateSet) for iset in results)
         assert all("P_lin" in iset.intermediates for iset in results)
@@ -69,8 +69,8 @@ class TestC2IEmulatorImplEmulate:
         results = emulator_impl.emulate(test_params)
 
         assert len(results) == 1
-        assert "P_lin" in results[0].intermediates
-        assert "chi" in results[0].intermediates
+        assert "P_lin" in results(0).intermediates
+        assert "chi" in results(0).intermediates
 
     def test_emulate_with_batch_size(self, trained_emulator: Path) -> None:
         """Test emulation with custom batch size."""
@@ -95,8 +95,8 @@ class TestC2IEmulatorImplEmulate:
         with pytest.raises(ValueError, match="do not match"):
             emulator_impl.emulate(test_params)
 
-    def test_emulate_returns_tf_tensors(self, trained_emulator: Path) -> None:
-        """Test that emulation returns TFTensor instances."""
+    def test_emulate_returns_tensors(self, trained_emulator: Path) -> None:
+        """Test that emulation returns TensorBase instances."""
         emulator_impl = C2IEmulatorImpl.load_emulator(trained_emulator)
 
         test_params = {
@@ -106,8 +106,8 @@ class TestC2IEmulatorImplEmulate:
 
         results = emulator_impl.emulate(test_params)
 
-        assert isinstance(results[0].intermediates["P_lin"].tensor, TFTensor)
-        assert isinstance(results[0].intermediates["chi"].tensor, TFTensor)
+        assert isinstance(results(0).intermediates["P_lin"].tensor, TensorBase)
+        assert isinstance(results(0).intermediates["chi"].tensor, TensorBase)
 
 
 class TestC2IEmulatorImplEmulateFromFile:

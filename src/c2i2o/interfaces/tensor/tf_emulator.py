@@ -13,7 +13,7 @@ from pydantic import Field
 
 from c2i2o.core.c2i_emulator import C2IEmulator
 from c2i2o.core.grid import Grid1D, GridBase, ProductGrid
-from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.intermediate import IntermediateBase, IntermediateMultiSet, IntermediateSet
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 
 warnings.filterwarnings(
@@ -141,7 +141,7 @@ class TFC2IEmulator(C2IEmulator):
     def train(
         self,
         input_data: dict[str, np.ndarray],
-        output_data: list[IntermediateSet],
+        output_data: IntermediateMultiSet,
         validation_split: float = 0.2,
         **kwargs: Any,
     ) -> None:
@@ -289,7 +289,7 @@ class TFC2IEmulator(C2IEmulator):
         self,
         input_data: dict[str, np.ndarray],
         **kwargs: Any,
-    ) -> list[IntermediateSet]:
+    ) -> IntermediateMultiSet:
         """Evaluate the emulator at new parameter values.
 
         Parameters
@@ -378,7 +378,7 @@ class TFC2IEmulator(C2IEmulator):
             iset = IntermediateSet(intermediates=intermediates)
             result.append(iset)
 
-        return result
+        return IntermediateMultiSet.from_intermediate_set_list(result)
 
     def save(self, filepath: str | Path, **kwargs: Any) -> None:
         """Save the trained emulator to disk.

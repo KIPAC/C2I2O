@@ -6,15 +6,19 @@ physical quantities computed from cosmological parameters, such as matter
 power spectra, distance-redshift relations, and Hubble evolution.
 """
 
+from __future__ import annotations
+
 from abc import ABC
 from collections.abc import Generator, Mapping
+from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 import tables_io
+import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from c2i2o.core.grid import GridBase
+from c2i2o.core.grid import Grid1D, GridBase, ProductGrid
 from c2i2o.core.tensor import NumpyTensor, NumpyTensorSet, TensorBase
 
 
@@ -449,6 +453,131 @@ class IntermediateSet(BaseModel):
         """
         return f"IntermediateSet(n_intermediates={len(self)}, names={self.names})"
 
+    def to_file(self, filepath: str | Path) -> None:
+        """Save IntermediateSet to HDF5 and YAML files.
+
+        Saves tensor data to HDF5 and metadata (grids, names, units) to YAML.
+
+        Parameters
+        ----------
+        filepath
+            Base path for output files (without extension).
+            Creates filepath.hdf5 and filepath.yaml
+
+        Examples
+        --------
+        >>> iset.to_file("results/intermediates")
+        # Creates: results/intermediates.hdf5 and results/intermediates.yaml
+        """
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save tensor data to HDF5
+        data_dict = {}
+        for name, intermediate in self.intermediates.items():
+            data_dict[name] = intermediate.tensor.to_numpy()
+
+        hdf5_path = filepath.with_suffix(".hdf5")
+        tables_io.write(data_dict, hdf5_path)
+
+        # Save metadata to YAML
+        metadata: dict[str, Any] = {
+            "intermediate_names": sorted(self.intermediates.keys()),
+            "description": self.description,
+            "intermediates": {},
+        }
+
+        for name, intermediate in self.intermediates.items():
+            grid_dict = intermediate.grid.model_dump()
+
+            metadata["intermediates"][name] = {
+                "name": intermediate.name,
+                "units": intermediate.units,
+                "description": intermediate.description,
+                "grid": grid_dict,
+                "tensor_type": intermediate.tensor.tensor_type,
+                "shape": list(intermediate.shape),
+            }
+
+        yaml_path = filepath.with_suffix(".yaml")
+        with open(yaml_path, "w") as f:
+            yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+
+    @classmethod
+    def from_file(cls, filepath: str | Path) -> IntermediateSet:
+        """Load IntermediateSet from HDF5 and YAML files.
+
+        Parameters
+        ----------
+        filepath
+            Base path to input files (without extension).
+            Reads from filepath.hdf5 and filepath.yaml
+
+        Returns
+        -------
+            Loaded IntermediateSet.
+
+        Raises
+        ------
+        FileNotFoundError
+            If HDF5 or YAML file does not exist.
+
+        Examples
+        --------
+        >>> iset = IntermediateSet.from_file("results/intermediates")
+        """
+        filepath = Path(filepath)
+
+        hdf5_path = filepath.with_suffix(".hdf5")
+        yaml_path = filepath.with_suffix(".yaml")
+
+        if not hdf5_path.exists():
+            raise FileNotFoundError(f"HDF5 file not found: {hdf5_path}")
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"YAML file not found: {yaml_path}")
+
+        # Load metadata from YAML
+        with open(yaml_path) as f:
+            metadata = yaml.safe_load(f)
+
+        # Load tensor data from HDF5
+        data_dict = tables_io.read(hdf5_path)
+
+        # Reconstruct intermediates
+        intermediates = {}
+        for name in metadata["intermediate_names"]:
+            meta = metadata["intermediates"][name]
+
+            # Reconstruct grid
+            grid_dict = meta["grid"]
+            grid_type = grid_dict.get("grid_type")
+
+            if grid_type == "grid_1d":
+                grid: GridBase = Grid1D(**grid_dict)
+            elif grid_type == "product_grid":
+                grid = ProductGrid(**grid_dict)
+            else:
+                raise ValueError(f"Unknown grid type: {grid_type}")
+
+            # Create tensor with loaded data
+            values = data_dict[name]
+            tensor = NumpyTensor(grid=grid, values=values)
+
+            # Create intermediate
+            intermediate = IntermediateBase(
+                name=meta["name"],
+                tensor=tensor,
+                units=meta.get("units"),
+                description=meta.get("description"),
+            )
+
+            intermediates[name] = intermediate
+
+        return cls(
+            intermediates=intermediates,
+            description=metadata.get("description"),
+        )
+
     def save_values(self, filename: str) -> None:
         """Save intermediate values to HDF5 file using tables_io.
 
@@ -555,7 +684,7 @@ class IntermediateMultiSet(IntermediateSet):
         return cast(NumpyTensorSet, first_intermediate.tensor).n_samples
 
     @model_validator(mode="after")
-    def validate_all_tensor_sets(self) -> "IntermediateMultiSet":
+    def validate_all_tensor_sets(self) -> IntermediateMultiSet:
         """Validate that all intermediates contain NumpyTensorSet with same n_samples.
 
         Returns
@@ -595,7 +724,7 @@ class IntermediateMultiSet(IntermediateSet):
     def from_intermediate_set_list(
         cls,
         intermediate_sets: list[IntermediateSet],
-    ) -> "IntermediateMultiSet":
+    ) -> IntermediateMultiSet:
         """Construct IntermediateMultiSet from a list of IntermediateSet objects.
 
         All IntermediateSet objects must contain the same intermediate names
@@ -772,6 +901,143 @@ class IntermediateMultiSet(IntermediateSet):
         """
         intermediate_names = sorted(self.intermediates.keys())
         return f"IntermediateMultiSet(n_samples={self.n_samples}, " f"intermediates={intermediate_names})"
+
+    def to_file(self, filepath: str | Path) -> None:
+        """Save IntermediateMultiSet to HDF5 and YAML files.
+
+        Saves stacked tensor data to HDF5 and metadata to YAML.
+        More efficient than saving individual sets.
+
+        Parameters
+        ----------
+        filepath
+            Base path for output files (without extension).
+            Creates filepath.hdf5 and filepath.yaml
+
+        Examples
+        --------
+        >>> multi_set.to_file("results/training_data")
+        # Creates: results/training_data.hdf5 and results/training_data.yaml
+        """
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save tensor data to HDF5
+        # For NumpyTensorSet, save the full stacked array
+        data_dict = {}
+        for name, intermediate in self.intermediates.items():
+            # intermediate.tensor is a NumpyTensorSet
+            data_dict[name] = cast(
+                NumpyTensorSet, intermediate.tensor
+            ).values  # Shape: (n_samples, *grid_shape)
+
+        hdf5_path = filepath.with_suffix(".hdf5")
+        tables_io.write(data_dict, hdf5_path)
+
+        # Save metadata to YAML
+        metadata: dict[str, Any] = {
+            "n_samples": self.n_samples,
+            "intermediate_names": sorted(self.intermediates.keys()),
+            "description": self.description,
+            "intermediates": {},
+        }
+
+        for name, intermediate in self.intermediates.items():
+            grid_dict = intermediate.grid.model_dump()
+
+            metadata["intermediates"][name] = {
+                "name": intermediate.name,
+                "units": intermediate.units,
+                "description": intermediate.description,
+                "grid": grid_dict,
+                "tensor_type": intermediate.tensor.tensor_type,
+                "shape": list(intermediate.tensor.shape),
+                "grid_shape": list(cast(NumpyTensorSet, intermediate.tensor).grid_shape),
+            }
+
+        yaml_path = filepath.with_suffix(".yaml")
+        with open(yaml_path, "w") as f:
+            yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+
+    @classmethod
+    def from_file(cls, filepath: str | Path) -> IntermediateMultiSet:
+        """Load IntermediateMultiSet from HDF5 and YAML files.
+
+        Parameters
+        ----------
+        filepath
+            Base path to input files (without extension).
+            Reads from filepath.hdf5 and filepath.yaml
+
+        Returns
+        -------
+            Loaded IntermediateMultiSet.
+
+        Raises
+        ------
+        FileNotFoundError
+            If HDF5 or YAML file does not exist.
+
+        Examples
+        --------
+        >>> multi_set = IntermediateMultiSet.from_file("results/training_data")
+        >>> multi_set.n_samples
+        100
+        """
+        filepath = Path(filepath)
+
+        hdf5_path = filepath.with_suffix(".hdf5")
+        yaml_path = filepath.with_suffix(".yaml")
+
+        if not hdf5_path.exists():
+            raise FileNotFoundError(f"HDF5 file not found: {hdf5_path}")
+        if not yaml_path.exists():
+            raise FileNotFoundError(f"YAML file not found: {yaml_path}")
+
+        # Load metadata from YAML
+        with open(yaml_path) as f:
+            metadata = yaml.safe_load(f)
+
+        # Load tensor data from HDF5
+        data_dict = tables_io.read(hdf5_path)
+
+        # Get n_samples from metadata
+        n_samples = metadata["n_samples"]
+
+        # Reconstruct intermediates
+        intermediates = {}
+        for name in metadata["intermediate_names"]:
+            meta = metadata["intermediates"][name]
+
+            # Reconstruct grid
+            grid_dict = meta["grid"]
+            grid_type = grid_dict.get("grid_type")
+
+            if grid_type == "grid_1d":
+                grid: GridBase = Grid1D(**grid_dict)
+            elif grid_type == "product_grid":
+                grid = ProductGrid(**grid_dict)
+            else:
+                raise ValueError(f"Unknown grid type: {grid_type}")
+
+            # Create tensor set with loaded data
+            values = data_dict[name]  # Shape: (n_samples, *grid_shape)
+            tensor_set = NumpyTensorSet(grid=grid, n_samples=n_samples, values=values)
+
+            # Create intermediate
+            intermediate = IntermediateBase(
+                name=meta["name"],
+                tensor=tensor_set,
+                units=meta.get("units"),
+                description=meta.get("description"),
+            )
+
+            intermediates[name] = intermediate
+
+        return cls(
+            intermediates=intermediates,
+            description=metadata.get("description"),
+        )
 
 
 __all__ = [

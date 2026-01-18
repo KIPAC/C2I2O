@@ -11,7 +11,7 @@ from c2i2o.core.computation import ComputationConfig
 from c2i2o.core.cosmology import CosmologyBase
 from c2i2o.core.distribution import FixedDistribution
 from c2i2o.core.grid import Grid1D, ProductGrid
-from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.intermediate import IntermediateBase, IntermediateMultiSet, IntermediateSet
 from c2i2o.core.multi_distribution import MultiGauss, MultiLogNormal
 from c2i2o.core.parameter_space import ParameterSpace
 from c2i2o.core.scipy_distributions import Norm, Uniform
@@ -273,7 +273,7 @@ def trained_emulator(
         "sigma8": np.linspace(0.7, 0.9, n_samples),
     }
 
-    output_data = []
+    output_data_list = []
     for i in range(n_samples):
         k_values = grid.build_grid()
         p_lin_values = input_data["Omega_c"][i] * input_data["sigma8"][i] * k_values
@@ -286,7 +286,9 @@ def trained_emulator(
         chi = IntermediateBase(name="chi", tensor=chi_tensor)
 
         iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
-        output_data.append(iset)
+        output_data_list.append(iset)
+
+    output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
     # Create and train emulator
     emulator = TFC2IEmulator(
@@ -317,7 +319,7 @@ def test_emulator(baseline_cosmology: CosmologyBase) -> TFC2IEmulator:  # pylint
 
 
 @pytest.fixture
-def training_data() -> tuple[dict, list[IntermediateSet]]:
+def training_data() -> tuple[dict, IntermediateMultiSet]:
     """Create simple training data."""
     grid = Grid1D(min_value=0.1, max_value=10.0, n_points=20)
     n_samples = 10
@@ -329,7 +331,7 @@ def training_data() -> tuple[dict, list[IntermediateSet]]:
     }
 
     # Output data
-    output_data = []
+    output_data_list = []
     for i in range(n_samples):
         k_values = grid.build_grid()
         p_lin_values = input_data["Omega_c"][i] * input_data["sigma8"][i] * k_values
@@ -342,6 +344,8 @@ def training_data() -> tuple[dict, list[IntermediateSet]]:
         chi = IntermediateBase(name="chi", tensor=chi_tensor)
 
         iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
-        output_data.append(iset)
+        output_data_list.append(iset)
+
+    output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
     return input_data, output_data

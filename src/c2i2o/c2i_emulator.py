@@ -12,7 +12,7 @@ import tables_io
 import yaml
 from pydantic import BaseModel, Field
 
-from c2i2o.core.intermediate import IntermediateMultiSet, IntermediateSet
+from c2i2o.core.intermediate import IntermediateMultiSet
 from c2i2o.interfaces.tensor.tf_emulator import TFC2IEmulator
 
 
@@ -98,7 +98,7 @@ class C2IEmulatorImpl(BaseModel):
         self,
         input_data: dict[str, np.ndarray],
         **kwargs: Any,
-    ) -> list[IntermediateSet]:
+    ) -> IntermediateMultiSet:
         """Emulate intermediate quantities for given parameters.
 
         Parameters
@@ -146,7 +146,7 @@ class C2IEmulatorImpl(BaseModel):
         input_filepath: str | Path,
         output_filepath: str | Path | None = None,
         **kwargs: Any,
-    ) -> list[IntermediateSet]:
+    ) -> IntermediateMultiSet:
         """Emulate from parameters stored in HDF5 file.
 
         Parameters
@@ -193,19 +193,17 @@ class C2IEmulatorImpl(BaseModel):
         # Emulate
         results = self.emulate(input_data, **kwargs)
 
-        writeable_results = IntermediateMultiSet.from_intermediate_set_list(results)
-
         # Save results if output path provided
         if output_filepath is not None:
             output_filepath = Path(output_filepath)
             output_filepath.parent.mkdir(parents=True, exist_ok=True)
-            writeable_results.save_values(str(output_filepath))
+            results.save_values(str(output_filepath))
 
         return results
 
     def save_predictions(
         self,
-        predictions: list[IntermediateSet],
+        predictions: IntermediateMultiSet,
         filepath: str | Path,
     ) -> None:
         """Save predictions to HDF5 file.
@@ -224,8 +222,7 @@ class C2IEmulatorImpl(BaseModel):
         """
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        writeable_predictions = IntermediateMultiSet.from_intermediate_set_list(predictions)
-        writeable_predictions.save_values(str(filepath))
+        predictions.save_values(str(filepath))
 
     def to_yaml(self, filepath: str | Path) -> None:
         """Save the emulator configuration to YAML file.

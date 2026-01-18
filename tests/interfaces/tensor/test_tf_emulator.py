@@ -11,7 +11,8 @@ import pytest
 
 from c2i2o.core.cosmology import CosmologyBase
 from c2i2o.core.grid import Grid1D, GridBase, ProductGrid
-from c2i2o.core.intermediate import IntermediateBase, IntermediateSet
+from c2i2o.core.intermediate import IntermediateBase, IntermediateMultiSet, IntermediateSet
+from c2i2o.core.tensor import TensorBase
 from c2i2o.interfaces.ccl.cosmology import CCLCosmologyVanillaLCDM
 from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 
@@ -24,7 +25,6 @@ try:
     import tensorflow as tf
 
     from c2i2o.interfaces.tensor.tf_emulator import TFC2IEmulator
-    from c2i2o.interfaces.tensor.tf_tensor import TFTensor
 
     TF_AVAILABLE = True
 except ImportError:
@@ -105,7 +105,7 @@ class TestTFC2IEmulatorTraining:
         return Grid1D(min_value=0.1, max_value=10.0, n_points=20)
 
     @pytest.fixture
-    def simple_training_data(self, simple_grid: Grid1D) -> tuple[dict, list[IntermediateSet]]:
+    def simple_training_data(self, simple_grid: Grid1D) -> tuple[dict, IntermediateMultiSet]:
         """Create simple training data."""
         n_samples = 10
 
@@ -116,7 +116,7 @@ class TestTFC2IEmulatorTraining:
         }
 
         # Output data - create IntermediateSets with only the expected intermediate
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             # Create simple function: P(k) = Omega_c * sigma8 * k
             k_values = simple_grid.build_grid()
@@ -130,14 +130,15 @@ class TestTFC2IEmulatorTraining:
 
             # Create IntermediateSet with only P_lin
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
 
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
         return input_data, output_data
 
     def test_train_basic(
         self,
         baseline_cosmology: CosmologyBase,
-        simple_training_data: tuple[dict, list[IntermediateSet]],
+        simple_training_data: tuple[dict, IntermediateMultiSet],
     ) -> None:
         """Test basic training."""
         input_data, output_data = simple_training_data
@@ -161,7 +162,7 @@ class TestTFC2IEmulatorTraining:
     def test_train_with_early_stopping(
         self,
         baseline_cosmology: CosmologyBase,
-        simple_training_data: tuple[dict, list[IntermediateSet]],
+        simple_training_data: tuple[dict, IntermediateMultiSet],
     ) -> None:
         """Test training with early stopping callback."""
         input_data, output_data = simple_training_data
@@ -188,7 +189,7 @@ class TestTFC2IEmulatorTraining:
     def test_train_validation_split(
         self,
         baseline_cosmology: CosmologyBase,
-        simple_training_data: tuple[dict, list[IntermediateSet]],
+        simple_training_data: tuple[dict, IntermediateMultiSet],
     ) -> None:
         """Test training with validation split."""
         input_data, output_data = simple_training_data
@@ -221,14 +222,15 @@ class TestTFC2IEmulatorTraining:
         }
 
         # Only 2 IntermediateSets for 3 input samples
-        output_data = []
+        output_data_list = []
         for _i in range(2):
             k_values = simple_grid.build_grid()
             p_values = 0.25 * k_values
             tensor = TFTensor(grid=simple_grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -250,14 +252,15 @@ class TestTFC2IEmulatorTraining:
         }
 
         # Create IntermediateSets with wrong intermediate name
-        output_data = []
+        output_data_list = []
         for _i in range(2):
             k_values = simple_grid.build_grid()
             p_values = 0.25 * k_values
             tensor = TFTensor(grid=simple_grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="wrong_name", tensor=tensor)
             iset = IntermediateSet(intermediates={"wrong_name": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -286,14 +289,15 @@ class TestTFC2IEmulatorEvaluation:
             "sigma8": np.linspace(0.7, 0.9, n_samples),
         }
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_values = input_data["Omega_c"][i] * input_data["sigma8"][i] * k_values
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         # Create and train emulator
         emulator = TFC2IEmulator(
@@ -321,7 +325,7 @@ class TestTFC2IEmulatorEvaluation:
 
         result = emulator.emulate(eval_input)
 
-        assert isinstance(result, list)
+        assert isinstance(result, IntermediateMultiSet)
         assert len(result) == 2
         assert all(isinstance(iset, IntermediateSet) for iset in result)
         assert all("P_lin" in iset.intermediates for iset in result)
@@ -341,18 +345,18 @@ class TestTFC2IEmulatorEvaluation:
         result = emulator.emulate(eval_input)
 
         assert len(result) == 1
-        assert "P_lin" in result[0].intermediates
+        assert "P_lin" in result(0).intermediates
 
         # Check tensor properties
-        tensor = result[0].intermediates["P_lin"].tensor
+        tensor = result(0).intermediates["P_lin"].tensor
         assert tensor.shape == (20,)  # Should match grid size
-        assert isinstance(tensor, TFTensor)
+        assert isinstance(tensor, TensorBase)
 
     def test_evaluate_preserves_tensor_type(
         self,
         trained_emulator: tuple[TFC2IEmulator, Grid1D],
     ) -> None:
-        """Test that evaluation returns TFTensor instances."""
+        """Test that evaluation returns TensorBase instances."""
         emulator, grid = trained_emulator
 
         eval_input = {
@@ -361,10 +365,9 @@ class TestTFC2IEmulatorEvaluation:
         }
 
         result = emulator.emulate(eval_input)
-        tensor = result[0].intermediates["P_lin"].tensor
+        tensor = result(0).intermediates["P_lin"].tensor
 
-        assert isinstance(tensor, TFTensor)
-        assert tf.is_tensor(tensor.values)
+        assert isinstance(tensor, TensorBase)
 
     def test_evaluate_not_trained_raises_error(
         self,
@@ -426,7 +429,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
 
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
 
@@ -441,7 +444,9 @@ class TestTFC2IEmulatorMultipleIntermediates:
             chi = IntermediateBase(name="chi", tensor=chi_tensor)
 
             iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -464,7 +469,7 @@ class TestTFC2IEmulatorMultipleIntermediates:
 
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_lin_values = input_data["Omega_c"][i] * k_values
@@ -477,7 +482,9 @@ class TestTFC2IEmulatorMultipleIntermediates:
             chi = IntermediateBase(name="chi", tensor=chi_tensor)
 
             iset = IntermediateSet(intermediates={"P_lin": p_lin, "chi": chi})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -510,7 +517,7 @@ class TestTFC2IEmulatorProductGrid:
         n_samples = 8
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             # Create 2D function: P(k, z) = Omega_c * k * (1 + z)
             k_values = grid_k.build_grid()
@@ -521,7 +528,9 @@ class TestTFC2IEmulatorProductGrid:
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_kz", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_kz": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -544,7 +553,7 @@ class TestTFC2IEmulatorProductGrid:
         n_samples = 8
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid_k.build_grid()
             z_values = grid_z.build_grid()
@@ -554,7 +563,9 @@ class TestTFC2IEmulatorProductGrid:
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_kz", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_kz": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -570,9 +581,9 @@ class TestTFC2IEmulatorProductGrid:
         result = emulator.emulate(eval_input)
 
         assert len(result) == 1
-        tensor = cast(TFTensor, result[0].intermediates["P_kz"].tensor)
+        tensor = cast(TFTensor, result(0).intermediates["P_kz"].tensor)
         assert tensor.shape == (10, 8)
-        assert isinstance(tensor, TFTensor)
+        assert isinstance(tensor, TensorBase)
 
 
 @pytest.mark.skipif(not TF_AVAILABLE, reason="TensorFlow not available")
@@ -591,14 +602,16 @@ class TestTFC2IEmulatorSaveLoad:
 
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_values = input_data["Omega_c"][i] * k_values
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -634,14 +647,16 @@ class TestTFC2IEmulatorSaveLoad:
 
         input_data = {"Omega_c": np.linspace(0.20, 0.30, n_samples)}
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_values = input_data["Omega_c"][i] * k_values
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -664,8 +679,8 @@ class TestTFC2IEmulatorSaveLoad:
         result_after = loaded_emulator.emulate(eval_input)
 
         # Compare results
-        values_before = result_before[0].intermediates["P_lin"].tensor.to_numpy()
-        values_after = result_after[0].intermediates["P_lin"].tensor.to_numpy()
+        values_before = result_before(0).intermediates["P_lin"].tensor.to_numpy()
+        values_after = result_after(0).intermediates["P_lin"].tensor.to_numpy()
 
         np.testing.assert_allclose(values_before, values_after, rtol=1e-5)
 
@@ -708,14 +723,16 @@ class TestTFC2IEmulatorNormalization:
             "sigma8": np.linspace(0.7, 0.9, n_samples),
         }
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_values = input_data["Omega_c"][i] * input_data["sigma8"][i] * k_values
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",
@@ -741,14 +758,16 @@ class TestTFC2IEmulatorNormalization:
             "sigma8": np.linspace(0.7, 0.9, n_samples),
         }
 
-        output_data = []
+        output_data_list = []
         for i in range(n_samples):
             k_values = grid.build_grid()
             p_values = input_data["Omega_c"][i] * input_data["sigma8"][i] * k_values
             tensor = TFTensor(grid=grid, values=tf.constant(p_values, dtype=tf.float32))
             intermediate = IntermediateBase(name="P_lin", tensor=tensor)
             iset = IntermediateSet(intermediates={"P_lin": intermediate})
-            output_data.append(iset)
+            output_data_list.append(iset)
+
+        output_data = IntermediateMultiSet.from_intermediate_set_list(output_data_list)
 
         emulator = TFC2IEmulator(
             name="test_emulator",

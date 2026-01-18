@@ -36,7 +36,8 @@ class ParameterSpace(BaseModel):
         distribution class during deserialization.
 
     Examples
-    -------->>> param_space = ParameterSpace(
+    --------
+    >>> param_space = ParameterSpace(
     ...     parameters={
     ...         "omega_m": Uniform(loc=0.2, scale=0.2),  # [0.2, 0.4]
     ...         "sigma_8": Norm(loc=0.8, scale=0.1),

@@ -94,15 +94,7 @@ class TFTensor(TensorBase):
                 raise TypeError(f"Values must be TensorFlow tensor or NumPy array, got {type(v)}")
 
         # Determine expected shape based on grid type
-        if isinstance(grid, Grid1D):
-            expected_shape = cast(tuple, (grid.n_points,))
-        elif isinstance(grid, ProductGrid):
-            expected_shape = grid.shape
-        else:
-            # Fallback for other grid types
-            expected_shape = cast(tuple[int], getattr(grid, "shape", None))
-            if expected_shape is None:
-                return v
+        expected_shape = grid.shape
 
         # Check shape compatibility
         values_shape = tuple(v.shape.as_list())
@@ -143,12 +135,7 @@ class TFTensor(TensorBase):
                 raise TypeError(f"Values must be TensorFlow tensor or NumPy array, got {type(values)}")
 
         # Determine expected shape
-        if isinstance(self.grid, Grid1D):
-            expected_shape = cast(tuple, (self.grid.n_points,))
-        elif isinstance(self.grid, ProductGrid):
-            expected_shape = self.grid.shape
-        else:
-            expected_shape = cast(tuple, getattr(self.grid, "shape", None))
+        expected_shape = self.grid.shape
 
         # Validate shape
         values_shape = tuple(cast(tf.TensorShape, values.shape).as_list())

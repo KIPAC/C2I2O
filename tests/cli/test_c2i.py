@@ -520,22 +520,23 @@ class TestC2IComputeCommand:
                         "cosmology_type": "ccl_vanilla_lcdm",
                         "eval_grid": {
                             "grid_type": "product_grid",
-                            "grids": {
-                                "a": {
+                            "grids": [
+                                {
                                     "grid_type": "grid_1d",
                                     "min_value": 0.5,
                                     "max_value": 1.0,
                                     "n_points": 5,
                                     "spacing": "linear",
                                 },
-                                "k": {
+                                {
                                     "grid_type": "grid_1d",
                                     "min_value": 0.01,
                                     "max_value": 10.0,
                                     "n_points": 20,
                                     "spacing": "log",
                                 },
-                            },
+                            ],
+                            "dimension_names": ["a", "k"],
                         },
                         "eval_kwargs": {},
                     }
